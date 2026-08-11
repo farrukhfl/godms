@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Replace the placeholder domain with the production domain before launch. -->
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url><loc>https://www.example.com/</loc></url>
+  <url><loc>https://www.example.com/industries/retail</loc></url>
+  <url><loc>https://www.example.com/industries/hospitality</loc></url>
+  <url><loc>https://www.example.com/industries/services</loc></url>
+  <url><loc>https://www.example.com/industries/healthcare</loc></url>
+  <url><loc>https://www.example.com/industries/education</loc></url>
+  <url><loc>https://www.example.com/industries/government</loc></url>
+  <url><loc>https://www.example.com/solutions/credit-card-processing</loc></url>
+  <url><loc>https://www.example.com/solutions/pos</loc></url>
+  <url><loc>https://www.example.com/solutions/cash-advance</loc></url>
+  <url><loc>https://www.example.com/solutions/ach-processing</loc></url>
+  <url><loc>https://www.example.com/solutions/ebt-processing</loc></url>
+  <url><loc>https://www.example.com/solutions/atm-placement</loc></url>
+  <url><loc>https://www.example.com/solutions/airvac</loc></url>
+  <url><loc>https://www.example.com/solutions/web-360</loc></url>
+  <url><loc>https://www.example.com/store/terminals</loc></url>
+  <url><loc>https://www.example.com/store/accessories</loc></url>
+  <url><loc>https://www.example.com/store/atm-accessories</loc></url>
+  <url><loc>https://www.example.com/store/barcode-scanners</loc></url>
+  <url><loc>https://www.example.com/store/clover</loc></url>
+  <url><loc>https://www.example.com/store/pos</loc></url>
+  <url><loc>https://www.example.com/store/pos-equipment</loc></url>
+  <url><loc>https://www.example.com/store/printers</loc></url>
+  <url><loc>https://www.example.com/store/paper-ink</loc></url>
+  <url><loc>https://www.example.com/about</loc></url>
+  <url><loc>https://www.example.com/careers</loc></url>
+  <url><loc>https://www.example.com/referral-partner</loc></url>
+  <url><loc>https://www.example.com/partner-program</loc></url>
+  <url><loc>https://www.example.com/contact</loc></url>
+  <url><loc>https://www.example.com/open-an-account</loc></url>
+  <url><loc>https://www.example.com/privacy-policy</loc></url>
+  <url><loc>https://www.example.com/terms-of-use</loc></url>
+</urlset>
