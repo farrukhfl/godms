@@ -9,7 +9,7 @@ export default function MobileMenu({ onClose }) {
   const [openGroup, setOpenGroup] = useState(null)
 
   return (
-    <div id="mobile-navigation" className="max-h-[calc(100dvh-7rem)] overflow-y-auto border-t border-slate-200 bg-white px-4 pb-6 pt-3 xl:hidden">
+    <div id="mobile-navigation" className="mobile-menu-enter max-h-[calc(100dvh-7rem)] overflow-y-auto border-t border-slate-200 bg-white px-4 pb-6 pt-3 xl:hidden">
       <nav aria-label="Mobile navigation">
         <Link to="/" onClick={onClose} className="block rounded-lg px-3 py-3 font-semibold text-navy hover:bg-slate-50">Home</Link>
         {navGroups.map((group) => {
@@ -28,9 +28,9 @@ export default function MobileMenu({ onClose }) {
                 <ChevronDown aria-hidden="true" size={18} className={`transition ${isOpen ? 'rotate-180' : ''}`} />
               </button>
               {isOpen && (
-                <div id={panelId} className="grid gap-1 pb-3 pl-3">
-                  {group.items.map(({ label, path, icon: Icon }) => (
-                    <Link key={path} to={path} onClick={onClose} className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-slate-600 hover:bg-mist hover:text-primary">
+                <div id={panelId} className="mobile-panel-enter grid gap-1 pb-3 pl-3">
+                  {group.items.map(({ label, path, icon: Icon }, index) => (
+                    <Link key={path} to={path} onClick={onClose} style={{ '--menu-item-delay': `${index * 35}ms` }} className="mega-menu-item flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-slate-600 hover:translate-x-1 hover:bg-mist hover:text-primary">
                       <Icon aria-hidden="true" size={17} />{label}
                     </Link>
                   ))}

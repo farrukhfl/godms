@@ -2,6 +2,7 @@ import { Mail, Phone } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { industries, solutions } from '../../data/navigation'
 import { siteConfig } from '../../data/siteConfig'
+import Reveal from '../ui/Reveal'
 
 const company = [
   { label: 'About Us', path: '/about' },
@@ -25,48 +26,50 @@ const socialLinks = [
   { label: 'Facebook', url: siteConfig.social.facebook, path: 'M13.7 22v-9h3l.5-3.5h-3.5V7.3c0-1 .3-1.7 1.8-1.7h1.9V2.5c-.3 0-1.5-.1-2.8-.1-2.8 0-4.7 1.7-4.7 4.8v2.3H6.8V13h3.1v9h3.8Z' },
 ]
 
-function FooterLinks({ title, links }) {
+function FooterLinks({ title, links, delay = 0 }) {
   return (
-    <div>
+    <Reveal delay={delay}>
       <h3 className="mb-4 font-bold text-white">{title}</h3>
       <ul className="space-y-3 text-sm text-white/85">
-        {links.map((link) => <li key={link.path + link.label}><Link to={link.path} className="transition hover:text-accent">{link.label}</Link></li>)}
+        {links.map((link) => <li key={link.path + link.label}><Link to={link.path} className="footer-link inline-block transition hover:translate-x-1 hover:text-blue-300">{link.label}</Link></li>)}
       </ul>
-    </div>
+    </Reveal>
   )
 }
 
 export default function Footer() {
   return (
-    <footer className="bg-navy text-white">
+    <footer className="relative overflow-hidden bg-navy text-white">
+      <div className="footer-glow absolute -bottom-52 -left-40 h-[30rem] w-[30rem] rounded-full bg-primary/20 blur-3xl" />
+      <div className="footer-glow absolute -right-52 top-10 h-96 w-96 rounded-full bg-blue-400/10 blur-3xl [animation-delay:-5s]" />
       <div className="mx-auto grid max-w-7xl gap-10 px-4 py-16 sm:px-6 md:grid-cols-2 lg:grid-cols-6 lg:px-8">
-        <div className="md:col-span-2">
-          <Link to="/" className="inline-flex rounded-2xl bg-white px-4 py-3 shadow-lg" aria-label={`${siteConfig.company.fullName} home`}>
+        <Reveal direction="left" className="relative md:col-span-2">
+          <Link to="/" className="footer-logo inline-flex rounded-2xl bg-white px-4 py-3 shadow-lg transition duration-300" aria-label={`${siteConfig.company.fullName} home`}>
             <img src="/logo.png" alt={siteConfig.company.fullName} width="1120" height="314" className="h-auto w-48 object-contain" />
           </Link>
           <p className="mt-5 max-w-sm text-sm leading-6 text-white/85">Straightforward payments, dependable technology, and a real support team invested in your growth.</p>
           <div className="mt-6 space-y-3 text-sm text-white">
-            <a href={siteConfig.phone.href} className="flex items-center gap-2 hover:text-white"><Phone aria-hidden="true" size={16} className="text-accent" /> {siteConfig.phone.display}</a>
-            <a href={`mailto:${siteConfig.email}`} className="flex min-w-0 items-center gap-2 hover:text-white"><Mail aria-hidden="true" size={16} className="shrink-0 text-accent" /> <span className="break-all">{siteConfig.email}</span></a>
+            <a href={siteConfig.phone.href} className="flex items-center gap-2 transition hover:text-blue-200"><Phone aria-hidden="true" size={16} className="text-blue-300" /> {siteConfig.phone.display}</a>
+            <a href={`mailto:${siteConfig.email}`} className="flex min-w-0 items-center gap-2 transition hover:text-blue-200"><Mail aria-hidden="true" size={16} className="shrink-0 text-blue-300" /> <span className="break-all">{siteConfig.email}</span></a>
           </div>
           <div id="social" className="mt-6 flex gap-3">
             {socialLinks.map(({ label, url, path }) => (
-              <a key={label} href={url} target="_blank" rel="noreferrer" aria-label={`${siteConfig.company.shortName} on ${label} (opens in a new tab)`} className="flex h-9 w-9 items-center justify-center rounded-lg bg-white/15 text-white transition hover:bg-white/25">
+              <a key={label} href={url} target="_blank" rel="noreferrer" aria-label={`${siteConfig.company.shortName} on ${label} (opens in a new tab)`} className="footer-social flex h-9 w-9 items-center justify-center rounded-lg bg-white/15 text-white transition hover:bg-primary">
                 <svg viewBox="0 0 24 24" aria-hidden="true" className="h-[17px] w-[17px] fill-current"><path d={path} /></svg>
               </a>
             ))}
           </div>
-        </div>
-        <FooterLinks title="Solutions" links={solutions.slice(0, 6)} />
-        <FooterLinks title="Industries" links={industries} />
-        <FooterLinks title="Company" links={company} />
-        <FooterLinks title="Resources" links={resources} />
+        </Reveal>
+        <FooterLinks title="Solutions" links={solutions.slice(0, 6)} delay={80} />
+        <FooterLinks title="Industries" links={industries} delay={150} />
+        <FooterLinks title="Company" links={company} delay={220} />
+        <FooterLinks title="Resources" links={resources} delay={290} />
       </div>
       <div className="border-t border-white/10">
-        <div className="mx-auto flex max-w-7xl flex-col gap-3 px-4 py-5 text-xs text-white/85 sm:flex-row sm:items-center sm:justify-between sm:px-6 lg:px-8">
+        <Reveal className="mx-auto flex max-w-7xl flex-col gap-3 px-4 py-5 text-xs text-white/85 sm:flex-row sm:items-center sm:justify-between sm:px-6 lg:px-8">
           <p>&copy; {new Date().getFullYear()} {siteConfig.company.legalName}. All rights reserved.</p>
           <div className="flex gap-4"><Link to="/privacy-policy" className="hover:text-white">Privacy</Link><Link to="/terms-of-use" className="hover:text-white">Terms</Link></div>
-        </div>
+        </Reveal>
       </div>
     </footer>
   )

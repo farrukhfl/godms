@@ -6,6 +6,7 @@ import FAQAccordion from '../components/sections/FAQAccordion'
 import Button from '../components/ui/Button'
 import Card from '../components/ui/Card'
 import FormField, { formControlClasses } from '../components/ui/FormField'
+import Reveal from '../components/ui/Reveal'
 import SectionHeading from '../components/ui/SectionHeading'
 
 const partnerReasons = [
@@ -109,63 +110,63 @@ export default function PartnerProgramPage() {
       <Seo title="Partner Program" description="Join the DMS Partner Program, refer merchants to complete payment solutions, track conversions, and build recurring revenue." />
 
       <section className="relative overflow-hidden bg-navy py-20 text-white sm:py-28">
-        <div className="absolute inset-y-0 right-0 w-1/2 bg-gradient-to-l from-primary/30 to-transparent" />
+        <div className="hero-blob absolute inset-y-0 right-0 w-1/2 bg-gradient-to-l from-primary/30 to-transparent" />
         <div className="relative mx-auto grid max-w-7xl items-center gap-12 px-4 sm:px-6 lg:grid-cols-[1.2fr_0.8fr] lg:px-8">
           <div>
-            <p className="text-sm font-bold uppercase tracking-[0.2em] text-accent">DMS Partner Program</p>
-            <h1 className="mt-5 text-balance text-5xl font-extrabold tracking-tight sm:text-6xl">DMS Partner Program: Better Together in Merchant Services</h1>
-            <p className="mt-6 text-2xl font-extrabold text-white">You bring the merchants. We&apos;ll handle the payments.</p>
-            <p className="mt-4 max-w-3xl text-lg leading-8 text-white/85">Build a new revenue stream when merchants switch to DMS and continue earning as eligible referrals process under the program.</p>
-            <Button href="#partner-application" className="mt-9 px-7 py-4 text-base">Become a Partner <ArrowRight aria-hidden="true" size={19} /></Button>
+            <p className="hero-animate-1 text-sm font-bold uppercase tracking-[0.2em] text-accent">DMS Partner Program</p>
+            <h1 className="hero-animate-2 mt-5 text-balance text-5xl font-extrabold tracking-tight sm:text-6xl">DMS Partner Program: Better Together in Merchant Services</h1>
+            <p className="hero-animate-3 mt-6 text-2xl font-extrabold text-white">You bring the merchants. We&apos;ll handle the payments.</p>
+            <p className="hero-animate-3 mt-4 max-w-3xl text-lg leading-8 text-white/85">Build a new revenue stream when merchants switch to DMS and continue earning as eligible referrals process under the program.</p>
+            <Button href="#partner-application" className="hero-animate-4 mt-9 px-7 py-4 text-base">Become a Partner <ArrowRight aria-hidden="true" size={19} /></Button>
           </div>
           <div className="grid grid-cols-2 gap-4">
-            {['Introduce', 'Track', 'Activate', 'Earn'].map((word, index) => <div key={word} className={`rounded-2xl border border-white/15 p-6 ${index === 3 ? 'bg-accent text-navy' : 'bg-white/5'}`}><span className="text-xs font-black tracking-widest opacity-60">0{index + 1}</span><p className="mt-8 text-xl font-extrabold">{word}</p></div>)}
+            {['Introduce', 'Track', 'Activate', 'Earn'].map((word, index) => <div key={word} style={{ animationDelay: `${260 + index * 120}ms` }} className={`hero-animate-4 rounded-2xl border border-white/15 p-6 transition duration-300 hover:-translate-y-2 ${index === 3 ? 'bg-accent text-navy' : 'bg-white/5 hover:bg-white/10'}`}><span className="text-xs font-black tracking-widest opacity-60">0{index + 1}</span><p className="mt-8 text-xl font-extrabold">{word}</p></div>)}
           </div>
         </div>
       </section>
 
       <section className="py-20 sm:py-24">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-          <SectionHeading eyebrow="Why Partner" title="A merchant-services program built to support your growth." />
-          <div className="mt-12 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">{partnerReasons.map(({ icon: Icon, title, text }) => <Card key={title}><Icon aria-hidden="true" className="text-primary" size={27} /><h3 className="mt-5 text-xl font-extrabold text-navy">{title}</h3><p className="mt-3 text-sm leading-6 text-slate-600">{text}</p></Card>)}</div>
+          <Reveal><SectionHeading eyebrow="Why Partner" title="A merchant-services program built to support your growth." /></Reveal>
+          <div className="mt-12 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">{partnerReasons.map(({ icon: Icon, title, text }, index) => <Reveal key={title} delay={index * 100} className="h-full"><Card className="h-full hover:-translate-y-2 hover:border-primary/30"><Icon aria-hidden="true" className="text-primary" size={27} /><h3 className="mt-5 text-xl font-extrabold text-navy">{title}</h3><p className="mt-3 text-sm leading-6 text-slate-600">{text}</p></Card></Reveal>)}</div>
         </div>
       </section>
 
       <section className="bg-slate-50 py-20 sm:py-24">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-          <SectionHeading eyebrow="What You Can Recommend" title="Eight ways to solve a merchant problem." description="Lead with the need you already understand, then let DMS build the right implementation." />
+          <Reveal><SectionHeading eyebrow="What You Can Recommend" title="Eight ways to solve a merchant problem." description="Lead with the need you already understand, then let DMS build the right implementation." /></Reveal>
           <div className="mt-12 grid gap-px overflow-hidden rounded-2xl border border-slate-200 bg-slate-200 sm:grid-cols-2 lg:grid-cols-4">
-            {recommendations.map(([title, text, path]) => <Link key={title} to={path} className="group bg-white p-6 transition hover:bg-mist"><h3 className="font-extrabold text-navy">{title}</h3><p className="mt-2 text-sm leading-6 text-slate-600">{text}</p><span className="mt-5 inline-flex items-center gap-2 text-sm font-bold text-primary">View solution <ArrowRight aria-hidden="true" className="transition group-hover:translate-x-1" size={16} /></span></Link>)}
+            {recommendations.map(([title, text, path], index) => <Reveal key={title} delay={(index % 4) * 80}><Link to={path} className="group block h-full bg-white p-6 transition hover:bg-mist"><h3 className="font-extrabold text-navy">{title}</h3><p className="mt-2 text-sm leading-6 text-slate-600">{text}</p><span className="mt-5 inline-flex items-center gap-2 text-sm font-bold text-primary">View solution <ArrowRight aria-hidden="true" className="transition group-hover:translate-x-1" size={16} /></span></Link></Reveal>)}
           </div>
         </div>
       </section>
 
       <section className="bg-primary py-20 text-white sm:py-24">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-          <SectionHeading eyebrow="How It Works" title="From application to commission in four stages." light />
-          <div className="mt-14 grid gap-8 sm:grid-cols-2 lg:grid-cols-4">{process.map(([title, text], index) => <div key={title} className="border-t border-white/30 pt-6"><span className="font-black text-accent">0{index + 1}</span><h3 className="mt-4 text-2xl font-extrabold">{title}</h3><p className="mt-3 leading-7 text-white/85">{text}</p></div>)}</div>
+          <Reveal><SectionHeading eyebrow="How It Works" title="From application to commission in four stages." light /></Reveal>
+          <div className="mt-14 grid gap-8 sm:grid-cols-2 lg:grid-cols-4">{process.map(([title, text], index) => <Reveal key={title} delay={index * 110}><div className="border-t border-white/30 pt-6 transition duration-300 hover:-translate-y-2"><span className="font-black text-accent">0{index + 1}</span><h3 className="mt-4 text-2xl font-extrabold">{title}</h3><p className="mt-3 leading-7 text-white/85">{text}</p></div></Reveal>)}</div>
         </div>
       </section>
 
       <section className="py-20 sm:py-24">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-          <SectionHeading eyebrow="Industries Served" title="Bring value to the businesses you already know." />
-          <div className="mt-10 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">{industries.map(({ icon: Icon, title, text }) => <Card key={title}><Icon aria-hidden="true" className="text-primary" size={27} /><h3 className="mt-5 text-xl font-extrabold text-navy">{title}</h3><p className="mt-2 text-sm leading-6 text-slate-600">{text}</p></Card>)}</div>
+          <Reveal><SectionHeading eyebrow="Industries Served" title="Bring value to the businesses you already know." /></Reveal>
+          <div className="mt-10 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">{industries.map(({ icon: Icon, title, text }, index) => <Reveal key={title} delay={index * 100} className="h-full"><Card className="h-full hover:-translate-y-2 hover:border-primary/30"><Icon aria-hidden="true" className="text-primary" size={27} /><h3 className="mt-5 text-xl font-extrabold text-navy">{title}</h3><p className="mt-2 text-sm leading-6 text-slate-600">{text}</p></Card></Reveal>)}</div>
         </div>
       </section>
 
       <section className="bg-mist py-20 sm:py-24">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-          <SectionHeading eyebrow="What You Get" title="More value from every client conversation." />
-          <div className="mt-12 grid gap-6 md:grid-cols-3">{outcomes.map(([title, text]) => <div key={title} className="rounded-2xl bg-white p-7 shadow-soft"><Handshake aria-hidden="true" className="text-primary" size={28} /><h3 className="mt-5 text-xl font-extrabold text-navy">{title}</h3><p className="mt-3 leading-7 text-slate-600">{text}</p></div>)}</div>
+          <Reveal><SectionHeading eyebrow="What You Get" title="More value from every client conversation." /></Reveal>
+          <div className="mt-12 grid gap-6 md:grid-cols-3">{outcomes.map(([title, text], index) => <Reveal key={title} delay={index * 120}><div className="rounded-2xl bg-white p-7 shadow-soft transition duration-300 hover:-translate-y-2"><Handshake aria-hidden="true" className="text-primary" size={28} /><h3 className="mt-5 text-xl font-extrabold text-navy">{title}</h3><p className="mt-3 leading-7 text-slate-600">{text}</p></div></Reveal>)}</div>
           <p className="mt-8 rounded-2xl bg-navy p-6 text-center font-semibold leading-7 text-white">Partner with an established merchant-services brand backed by broad solutions, guided onboarding, and a team accountable for the merchant experience.</p>
         </div>
       </section>
 
       <section id="partner-application" className="scroll-mt-32 py-20 sm:py-24">
         <div className="mx-auto grid max-w-7xl gap-12 px-4 sm:px-6 lg:grid-cols-[0.7fr_1.3fr] lg:gap-16 lg:px-8">
-          <aside><p className="text-sm font-bold uppercase tracking-[0.2em] text-primary">Partner Application</p><h2 className="mt-3 text-4xl font-extrabold text-navy">Build an ongoing partnership with DMS.</h2><p className="mt-5 leading-7 text-slate-600">Tell us about your business, network, and goals. The partner success team can review fit, explain attribution and compensation, and guide formal onboarding.</p></aside>
-          <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-soft sm:p-8">
+          <Reveal direction="left" as="aside"><p className="text-sm font-bold uppercase tracking-[0.2em] text-primary">Partner Application</p><h2 className="mt-3 text-4xl font-extrabold text-navy">Build an ongoing partnership with DMS.</h2><p className="mt-5 leading-7 text-slate-600">Tell us about your business, network, and goals. The partner success team can review fit, explain attribution and compensation, and guide formal onboarding.</p></Reveal>
+          <Reveal direction="right" delay={140} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-soft sm:p-8">
             {submitted ? <div className="flex min-h-[580px] flex-col items-center justify-center text-center" role="status"><span className="flex h-16 w-16 items-center justify-center rounded-full bg-emerald-100 text-emerald-700"><CheckCircle2 aria-hidden="true" size={32} /></span><h2 className="mt-6 text-3xl font-extrabold text-navy">Your application is recorded.</h2><p className="mt-3 max-w-md leading-7 text-slate-600">Thanks for your interest in building with DMS. A partner success specialist can follow up to discuss program fit and next steps.</p><Button variant="outline" className="mt-7" onClick={resetForm}>Start another application</Button></div> : <form onSubmit={handleSubmit} noValidate>
               <div className="grid gap-6 sm:grid-cols-2">
                 <FormField id="partner-firstName" label="First Name" error={errors.firstName} required><input id="partner-firstName" name="firstName" autoComplete="given-name" value={values.firstName} onChange={handleChange} className={`${formControlClasses} ${errors.firstName ? 'border-rose-500' : ''}`} /></FormField>
@@ -183,13 +184,13 @@ export default function PartnerProgramPage() {
               <Button type="submit" className="mt-7">Apply to Partner <ArrowRight aria-hidden="true" size={18} /></Button>
               <p className="mt-4 text-xs leading-5 text-slate-500">This demonstration form validates locally and does not transmit personal information or create a partner agreement.</p>
             </form>}
-          </div>
+          </Reveal>
         </div>
       </section>
 
-      <FAQAccordion questions={faqs} title="Partner questions, answered before you apply" description="Learn how referrals, attribution, merchant support, and earning potential work." />
+      <FAQAccordion questions={faqs} title="Partner questions, answered before you apply" description="Learn how referrals, attribution, merchant support, and earning potential work." variant="industry" />
 
-      <section className="bg-navy py-16 text-center text-white sm:py-20"><div className="mx-auto max-w-4xl px-4 sm:px-6"><h2 className="text-balance text-4xl font-extrabold sm:text-5xl">Have more questions? Our partner success team is here to help.</h2><Button to="/contact" variant="light" className="mt-8">Contact Us <ArrowRight aria-hidden="true" size={18} /></Button></div></section>
+      <section className="bg-navy py-16 text-center text-white sm:py-20"><Reveal direction="scale" className="mx-auto max-w-4xl px-4 sm:px-6"><h2 className="text-balance text-4xl font-extrabold sm:text-5xl">Have more questions? Our partner success team is here to help.</h2><Button to="/contact" variant="light" className="mt-8">Contact Us <ArrowRight aria-hidden="true" size={18} /></Button></Reveal></section>
     </>
   )
 }

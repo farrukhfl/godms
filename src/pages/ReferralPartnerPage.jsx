@@ -5,6 +5,7 @@ import Seo from '../components/Seo'
 import Button from '../components/ui/Button'
 import Card from '../components/ui/Card'
 import FormField, { formControlClasses } from '../components/ui/FormField'
+import Reveal from '../components/ui/Reveal'
 import SectionHeading from '../components/ui/SectionHeading'
 
 const sources = ['Existing client', 'Online search', 'Social media', 'Online ad', 'Word of mouth', 'Other']
@@ -70,14 +71,14 @@ export default function ReferralPartnerPage() {
       <Seo title="Referral Partner" description="Refer businesses to Dolphin Merchant Services and earn $500 when an eligible referred merchant goes live." />
 
       <section className="relative overflow-hidden bg-gradient-to-br from-primary via-primary to-primary-dark py-20 text-white sm:py-28">
-        <div className="absolute -right-12 -top-24 text-[18rem] font-black leading-none text-white/5 sm:text-[28rem]">$</div>
+        <div className="explore-symbol absolute -right-12 -top-24 text-[18rem] font-black leading-none text-white/5 sm:text-[28rem]">$</div>
         <div className="relative mx-auto grid max-w-7xl items-center gap-12 px-4 sm:px-6 lg:grid-cols-[1.25fr_0.75fr] lg:px-8">
           <div>
-            <p className="text-sm font-bold uppercase tracking-[0.2em] text-accent">DMS Referral Partner</p>
-            <h1 className="mt-5 max-w-4xl text-balance text-5xl font-extrabold tracking-tight sm:text-6xl">Refer businesses to DMS. Make money telling people about our products and services.</h1>
-            <Button href="#referral-form" variant="light" className="mt-9 px-7 py-4 text-base">Become a Partner <ArrowRight aria-hidden="true" size={19} /></Button>
+            <p className="hero-animate-1 text-sm font-bold uppercase tracking-[0.2em] text-accent">DMS Referral Partner</p>
+            <h1 className="hero-animate-2 mt-5 max-w-4xl text-balance text-5xl font-extrabold tracking-tight sm:text-6xl">Refer businesses to DMS. Make money telling people about our products and services.</h1>
+            <Button href="#referral-form" variant="light" className="hero-animate-4 mt-9 px-7 py-4 text-base">Become a Partner <ArrowRight aria-hidden="true" size={19} /></Button>
           </div>
-          <div className="rounded-[2rem] border border-white/20 bg-white/10 p-8 backdrop-blur-sm">
+          <div className="hero-dashboard rounded-[2rem] border border-white/20 bg-white/10 p-8 backdrop-blur-sm">
             <p className="text-7xl font-black text-accent">$500</p>
             <p className="mt-4 text-xl font-extrabold">for every eligible referral that goes live</p>
             <p className="mt-3 leading-7 text-white/85">No monthly referral limit. Program qualification, activation, and payment terms apply.</p>
@@ -87,27 +88,27 @@ export default function ReferralPartnerPage() {
 
       <section className="py-20 sm:py-24">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-          <SectionHeading eyebrow="How It Works" title="One introduction. Three simple steps." description="You make the connection. Our merchant team handles the payments conversation from there." />
+          <Reveal><SectionHeading eyebrow="How It Works" title="One introduction. Three simple steps." description="You make the connection. Our merchant team handles the payments conversation from there." /></Reveal>
           <div className="mt-14 grid gap-6 md:grid-cols-3">
-            {steps.map((step) => <div key={step.number} className="relative border-t-2 border-primary pt-8">
+            {steps.map((step, index) => <Reveal key={step.number} delay={index * 130}><div className="group relative border-t-2 border-primary pt-8 transition duration-300 hover:-translate-y-2">
               <span className="text-sm font-extrabold tracking-widest text-primary">{step.number}</span>
               <h3 className="mt-4 text-2xl font-extrabold text-navy">{step.title}</h3>
               <p className="mt-3 leading-7 text-slate-600">{step.text}</p>
-            </div>)}
+            </div></Reveal>)}
           </div>
         </div>
       </section>
 
       <section id="referral-form" className="scroll-mt-32 bg-slate-50 py-20 sm:py-24">
         <div className="mx-auto grid max-w-7xl gap-12 px-4 sm:px-6 lg:grid-cols-[0.7fr_1.3fr] lg:gap-16 lg:px-8">
-          <aside>
+          <Reveal direction="left" as="aside">
             <p className="text-sm font-bold uppercase tracking-[0.2em] text-primary">Referral Form</p>
             <h2 className="mt-3 text-4xl font-extrabold text-navy">Start with your details.</h2>
             <p className="mt-5 leading-7 text-slate-600">Tell us who you are and which solution you plan to recommend. After submission, the DMS team can follow up with program details and the next step for introducing a merchant.</p>
             <div className="mt-8 rounded-2xl bg-navy p-6 text-white"><p className="text-sm font-bold uppercase tracking-widest text-accent">Remember</p><p className="mt-3 text-xl font-extrabold">There is no cap on introductions.</p><p className="mt-2 text-sm leading-6 text-white/85">Refer one strong business or build a steady stream month after month.</p></div>
-          </aside>
+          </Reveal>
 
-          <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-soft sm:p-8">
+          <Reveal direction="right" delay={140} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-soft sm:p-8">
             {submitted ? <div className="flex min-h-[560px] flex-col items-center justify-center text-center" role="status">
               <span className="flex h-16 w-16 items-center justify-center rounded-full bg-emerald-100 text-emerald-700"><CheckCircle2 aria-hidden="true" size={32} /></span>
               <h2 className="mt-6 text-3xl font-extrabold text-navy">You&apos;re on the referral list.</h2>
@@ -132,28 +133,28 @@ export default function ReferralPartnerPage() {
               <Button type="submit" className="mt-7">Become a Referral Partner <ArrowRight aria-hidden="true" size={18} /></Button>
               <p className="mt-4 text-xs leading-5 text-slate-500">This demonstration form validates locally and does not transmit personal information.</p>
             </form>}
-          </div>
+          </Reveal>
         </div>
       </section>
 
       <section className="bg-accent py-14 text-navy">
-        <div className="mx-auto flex max-w-7xl flex-col items-start justify-between gap-6 px-4 sm:px-6 lg:flex-row lg:items-center lg:px-8">
+        <Reveal direction="scale" className="mx-auto flex max-w-7xl flex-col items-start justify-between gap-6 px-4 sm:px-6 lg:flex-row lg:items-center lg:px-8">
           <div><p className="text-sm font-bold uppercase tracking-[0.2em] text-primary-dark">Referral value</p><h2 className="mt-2 text-4xl font-extrabold">Easiest $500 you&apos;ll ever make</h2><p className="mt-3 max-w-3xl leading-7">Help businesses create seamless in-store and online payment experiences, then earn when an eligible introduction becomes an active DMS merchant.</p></div>
           <Button href="#referral-form" className="shrink-0">Start Referring</Button>
-        </div>
+        </Reveal>
       </section>
 
       <section className="py-20 sm:py-24">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-          <SectionHeading eyebrow="Industries Served" title="Know a business like one of these?" />
+          <Reveal><SectionHeading eyebrow="Industries Served" title="Know a business like one of these?" /></Reveal>
           <div className="mt-10 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
-            {industries.map(({ icon: Icon, title, text }) => <Card key={title}><Icon aria-hidden="true" className="text-primary" size={27} /><h3 className="mt-5 text-xl font-extrabold text-navy">{title}</h3><p className="mt-2 text-sm leading-6 text-slate-600">{text}</p></Card>)}
+            {industries.map(({ icon: Icon, title, text }, index) => <Reveal key={title} delay={index * 100} className="h-full"><Card className="h-full hover:-translate-y-2 hover:border-primary/30"><Icon aria-hidden="true" className="text-primary" size={27} /><h3 className="mt-5 text-xl font-extrabold text-navy">{title}</h3><p className="mt-2 text-sm leading-6 text-slate-600">{text}</p></Card></Reveal>)}
           </div>
         </div>
       </section>
 
       <section className="bg-navy py-16 text-center text-white sm:py-20">
-        <div className="mx-auto max-w-4xl px-4 sm:px-6"><h2 className="text-balance text-4xl font-extrabold sm:text-5xl">Have a favorite store? Introduce them to DMS.</h2><Button href="#referral-form" variant="light" className="mt-8">Make an Introduction <ArrowRight aria-hidden="true" size={18} /></Button></div>
+        <Reveal direction="scale" className="mx-auto max-w-4xl px-4 sm:px-6"><h2 className="text-balance text-4xl font-extrabold sm:text-5xl">Have a favorite store? Introduce them to DMS.</h2><Button href="#referral-form" variant="light" className="mt-8">Make an Introduction <ArrowRight aria-hidden="true" size={18} /></Button></Reveal>
       </section>
     </>
   )

@@ -3,15 +3,16 @@ import { Link } from 'react-router-dom'
 
 export default function MegaMenu({ id, labelledBy, group, onClose }) {
   return (
-    <div id={id} aria-labelledby={labelledBy} className="absolute left-1/2 top-full z-50 w-[min(760px,calc(100vw-2rem))] -translate-x-1/2 pt-3">
+    <div id={id} aria-labelledby={labelledBy} className="mega-menu-enter absolute left-1/2 top-full z-50 w-[min(760px,calc(100vw-2rem))] pt-3">
       <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white p-3 shadow-2xl shadow-navy/15">
         <div className="grid grid-cols-2 gap-1">
-          {group.items.map(({ label, path, icon: Icon, description }) => (
+          {group.items.map(({ label, path, icon: Icon, description }, index) => (
             <Link
               key={path}
               to={path}
               onClick={onClose}
-              className="group flex gap-3 rounded-xl p-3 transition hover:bg-mist"
+              style={{ '--menu-item-delay': `${40 + index * 35}ms` }}
+              className="mega-menu-item group flex gap-3 rounded-xl p-3 transition hover:translate-x-1 hover:bg-mist"
             >
               <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary transition group-hover:bg-primary group-hover:text-white">
                 <Icon aria-hidden="true" size={19} />

@@ -1,6 +1,7 @@
 import { ArrowRight, Phone } from 'lucide-react'
 import { siteConfig } from '../../data/siteConfig'
 import Button from '../ui/Button'
+import Reveal from '../ui/Reveal'
 
 export default function CTASection() {
   return (
@@ -10,15 +11,15 @@ export default function CTASection() {
       <div className="absolute inset-0 -z-10 bg-gradient-to-br from-transparent via-transparent to-primary-dark/70" />
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <div className="grid items-end gap-10 lg:grid-cols-[1.3fr_0.7fr]">
-          <div className="max-w-4xl">
+          <Reveal direction="left" className="max-w-4xl">
             <p className="mb-5 text-sm font-bold uppercase tracking-[0.24em] text-accent">Your next move starts here</p>
             <h2 className="text-balance text-4xl font-extrabold leading-[1.02] tracking-[-0.045em] sm:text-5xl lg:text-6xl">Ready for payments that work as hard as you do?</h2>
             <p className="mt-7 max-w-2xl text-lg leading-8 text-white/80">Tell us how your business operates. We&apos;ll help you build a simpler, smarter way to get paid.</p>
-          </div>
-          <div className="flex flex-col gap-3 lg:items-stretch">
+          </Reveal>
+          <Reveal direction="right" delay={180} className="flex flex-col gap-3 lg:items-stretch">
             <Button to="/open-an-account" variant="light" className="rounded-full px-8 py-4 text-base shadow-2xl hover:-translate-y-1">Open an account <ArrowRight aria-hidden="true" size={19} /></Button>
             <Button href={siteConfig.phone.href} className="rounded-full border border-white/30 bg-white/10 px-8 py-4 text-base shadow-none backdrop-blur hover:-translate-y-1 hover:bg-white/20"><Phone aria-hidden="true" size={18} /> {siteConfig.phone.display}</Button>
-          </div>
+          </Reveal>
         </div>
       </div>
     </section>

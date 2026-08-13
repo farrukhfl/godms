@@ -1,4 +1,5 @@
 import { Star } from 'lucide-react'
+import Reveal from '../ui/Reveal'
 import SectionHeading from '../ui/SectionHeading'
 
 const testimonials = [
@@ -27,10 +28,11 @@ export default function Testimonials() {
     <section className="relative overflow-hidden bg-mist py-24 sm:py-32">
       <div className="absolute -left-40 top-20 h-96 w-96 rounded-full bg-primary/10 blur-3xl" />
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-        <SectionHeading eyebrow="Illustrative merchant stories" title="Support that feels personal at every stage." description="These placeholder testimonials demonstrate the intended layout and will be replaced with verified merchant feedback before launch." />
+        <Reveal><SectionHeading eyebrow="Illustrative merchant stories" title="Support that feels personal at every stage." description="These placeholder testimonials demonstrate the intended layout and will be replaced with verified merchant feedback before launch." /></Reveal>
         <div className="relative mt-16 grid gap-6 md:grid-cols-2 xl:grid-cols-3">
-          {testimonials.map((testimonial) => (
-            <figure key={testimonial.name} className="group flex min-h-[25rem] flex-col rounded-[1.75rem] border border-white bg-white p-7 shadow-lg shadow-navy/5 transition duration-300 hover:-translate-y-2 hover:border-primary/20 hover:shadow-2xl hover:shadow-primary/10 sm:p-8">
+          {testimonials.map((testimonial, index) => (
+            <Reveal key={testimonial.name} delay={index * 130} className="h-full">
+            <figure className="group flex h-full min-h-[25rem] flex-col rounded-[1.75rem] border border-white bg-white p-7 shadow-lg shadow-navy/5 transition duration-300 hover:-translate-y-2 hover:border-primary/20 hover:shadow-2xl hover:shadow-primary/10 sm:p-8">
               <div className="flex items-center justify-between"><div className="flex gap-1 text-amber-500" aria-label="5 out of 5 stars">
                 {[1, 2, 3, 4, 5].map((star) => <Star key={star} aria-hidden="true" size={18} fill="currentColor" />)}
               </div><span className="text-5xl font-black leading-none text-primary/15">&ldquo;</span></div>
@@ -40,6 +42,7 @@ export default function Testimonials() {
                 <span><span className="block font-extrabold text-navy">{testimonial.name}</span><span className="mt-1 block text-xs text-slate-500">{testimonial.business}</span></span>
               </figcaption>
             </figure>
+            </Reveal>
           ))}
         </div>
       </div>
