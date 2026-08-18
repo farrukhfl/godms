@@ -33,7 +33,7 @@ export default function Testimonials() {
           {testimonials.map((testimonial, index) => (
             <Reveal key={testimonial.name} delay={index * 130} className="h-full">
             <figure className="group flex h-full min-h-[25rem] flex-col rounded-[1.75rem] border border-white bg-white p-7 shadow-lg shadow-navy/5 transition duration-300 hover:-translate-y-2 hover:border-primary/20 hover:shadow-2xl hover:shadow-primary/10 sm:p-8">
-              <div className="flex items-center justify-between"><div className="flex gap-1 text-amber-500" aria-label="5 out of 5 stars">
+              <div className="flex items-center justify-between"><div className="flex gap-1 text-primary" aria-label="5 out of 5 stars">
                 {[1, 2, 3, 4, 5].map((star) => <Star key={star} aria-hidden="true" size={18} fill="currentColor" />)}
               </div><span className="text-5xl font-black leading-none text-primary/15">&ldquo;</span></div>
               <blockquote className="mt-7 flex-1 text-xl font-semibold leading-9 tracking-tight text-navy">{testimonial.quote}&rdquo;</blockquote>

@@ -6,7 +6,7 @@ export default function LegalPage({ title, description, sections }) {
     <>
       <Seo title={title} description={description} />
       {import.meta.env.DEV && (
-        <div className="border-b border-amber-300 bg-amber-100 px-4 py-3 text-center text-sm font-bold text-amber-950" role="note">
+        <div className="border-b border-blue-200 bg-mist px-4 py-3 text-center text-sm font-bold text-primary-dark" role="note">
           Development notice: Placeholder legal content. Obtain review from qualified US payments counsel before launch.
         </div>
       )}
@@ -19,7 +19,7 @@ export default function LegalPage({ title, description, sections }) {
         </div>
       </header>
       <article className="mx-auto max-w-4xl px-4 py-16 sm:px-6 sm:py-20 lg:px-8">
-        <div className="rounded-xl border border-amber-200 bg-amber-50 p-5 text-sm leading-6 text-amber-950">
+        <div className="rounded-xl border border-blue-200 bg-mist p-5 text-sm leading-6 text-primary-dark">
           <strong>Placeholder legal document:</strong> This draft describes common topics for a US merchant-services website. It is not legal advice and must be replaced or approved by qualified counsel before publication.
         </div>
         <div className="mt-12 space-y-10">

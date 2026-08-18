@@ -1,11 +1,11 @@
-import { ChevronDown, LogIn } from 'lucide-react'
+import { ChevronDown, LogIn, LogOut } from 'lucide-react'
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { navGroups } from '../../data/navigation'
 import { siteConfig } from '../../data/siteConfig'
 import Button from '../ui/Button'
 
-export default function MobileMenu({ onClose }) {
+export default function MobileMenu({ onClose, signedIn, onSignOut }) {
   const [openGroup, setOpenGroup] = useState(null)
 
   return (
@@ -41,9 +41,7 @@ export default function MobileMenu({ onClose }) {
         })}
       </nav>
       <div className="mt-5 grid gap-3">
-        <a href={siteConfig.signInUrl} target="_blank" rel="noreferrer" aria-label="Sign in (opens in a new tab)" className="flex items-center justify-center gap-2 rounded-xl border border-slate-300 px-5 py-3 text-sm font-bold text-navy">
-          <LogIn aria-hidden="true" size={17} /> Sign In
-        </a>
+        {signedIn ? <button type="button" onClick={onSignOut} className="flex items-center justify-center gap-2 rounded-xl border border-slate-300 px-5 py-3 text-sm font-bold text-navy"><LogOut aria-hidden="true" size={17} /> Sign Out</button> : <Link to={siteConfig.signInUrl} onClick={onClose} className="flex items-center justify-center gap-2 rounded-xl border border-slate-300 px-5 py-3 text-sm font-bold text-navy"><LogIn aria-hidden="true" size={17} /> Sign In</Link>}
         <Button to="/contact" variant="outline" onClick={onClose}>Contact Us</Button>
         <Button to="/open-an-account" onClick={onClose}>Open An Account</Button>
       </div>

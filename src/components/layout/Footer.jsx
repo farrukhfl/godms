@@ -45,7 +45,7 @@ export default function Footer() {
       <div className="mx-auto grid max-w-7xl gap-10 px-4 py-16 sm:px-6 md:grid-cols-2 lg:grid-cols-6 lg:px-8">
         <Reveal direction="left" className="relative md:col-span-2">
           <Link to="/" className="footer-logo inline-flex rounded-2xl bg-white px-4 py-3 shadow-lg transition duration-300" aria-label={`${siteConfig.company.fullName} home`}>
-            <img src="/logo.png" alt={siteConfig.company.fullName} width="1120" height="314" className="h-auto w-48 object-contain" />
+            <img src={siteConfig.company.logoUrl} alt={siteConfig.company.fullName} loading="lazy" decoding="async" width="1120" height="314" className="h-auto w-48 object-contain" />
           </Link>
           <p className="mt-5 max-w-sm text-sm leading-6 text-white/85">Straightforward payments, dependable technology, and a real support team invested in your growth.</p>
           <div className="mt-6 space-y-3 text-sm text-white">

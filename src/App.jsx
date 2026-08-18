@@ -15,6 +15,7 @@ import OpenAccountPage from './pages/OpenAccountPage'
 import PartnerProgramPage from './pages/PartnerProgramPage'
 import PlaceholderPage from './pages/PlaceholderPage'
 import ReferralPartnerPage from './pages/ReferralPartnerPage'
+import SignInPage from './pages/SignInPage'
 
 const categoryRoutes = [
   ...industries.map((item) => ({ ...item, type: 'Industry solution' })),
@@ -50,6 +51,7 @@ const router = createBrowserRouter([
       { path: '/partner-program', element: <PartnerProgramPage /> },
       { path: '/privacy-policy', element: <LegalPage title="Privacy Policy" description={`How ${siteConfig.company.fullName} may collect, use, disclose, and protect information.`} sections={privacySections} /> },
       { path: '/referral-partner', element: <ReferralPartnerPage /> },
+      { path: '/sign-in', element: <SignInPage /> },
       { path: '/terms-of-use', element: <LegalPage title="Terms of Use" description={`Terms governing access to the ${siteConfig.company.fullName} website and its informational content.`} sections={termsSections} /> },
       ...categoryRoutes,
       { path: '*', element: <PlaceholderPage title="Page not found" description="The page you requested may have moved or is not available yet." /> },

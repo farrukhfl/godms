@@ -48,10 +48,10 @@ export default function Hero() {
                   <span className="rounded-full bg-emerald-100 px-2 py-1 text-[10px] font-bold text-emerald-700">+18.4%</span>
                 </div>
                 <svg viewBox="0 0 320 100" role="img" aria-label="Sales chart trending upward" className="mt-4 h-24 w-full overflow-visible">
-                  <defs><linearGradient id="sales-fill" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#4880FF" stopOpacity="0.28" /><stop offset="100%" stopColor="#4880FF" stopOpacity="0" /></linearGradient></defs>
+                  <defs><linearGradient id="sales-fill" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#0C79F7" stopOpacity="0.28" /><stop offset="100%" stopColor="#0C79F7" stopOpacity="0" /></linearGradient></defs>
                   <path className="sales-chart-fill" d="M0 83 C35 79 45 58 78 65 S125 76 151 50 S200 62 228 29 S275 42 320 8 L320 100 L0 100 Z" fill="url(#sales-fill)" />
-                  <path className="sales-chart-line" d="M0 83 C35 79 45 58 78 65 S125 76 151 50 S200 62 228 29 S275 42 320 8" fill="none" stroke="#4880FF" strokeWidth="5" strokeLinecap="round" />
-                  <circle className="sales-chart-dot" cx="320" cy="8" r="6" fill="#f3b61f" stroke="white" strokeWidth="3" />
+                  <path className="sales-chart-line" d="M0 83 C35 79 45 58 78 65 S125 76 151 50 S200 62 228 29 S275 42 320 8" fill="none" stroke="#0C79F7" strokeWidth="5" strokeLinecap="round" />
+                  <circle className="sales-chart-dot" cx="320" cy="8" r="6" fill="#0C79F7" stroke="white" strokeWidth="3" />
                 </svg>
                 <div className="flex justify-between text-[10px] font-medium text-slate-400"><span>9 AM</span><span>12 PM</span><span>3 PM</span><span>6 PM</span></div>
               </div>

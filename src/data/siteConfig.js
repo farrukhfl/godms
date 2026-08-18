@@ -12,6 +12,7 @@ export const siteConfig = {
     shortName: 'Dolphin',
     legalName: 'Dolphin Merchant Services LLC',
     posName: 'Dolphin POS',
+    logoUrl: 'https://godms.com/wp-content/uploads/2025/10/DMS-Logo-nobg-scaled-1-scaled.png',
   },
   phone: {
     label: 'Call Us',
@@ -26,7 +27,7 @@ export const siteConfig = {
     instagram: 'https://www.instagram.com/dolphinmerchantservices/',
     facebook: 'https://www.facebook.com/godms2015',
   },
-  signInUrl: 'https://derps.gotmsolutions.com/',
+  signInUrl: '/sign-in',
   address: {
     street: '100 Placeholder Plaza, Suite 200',
     city: 'Sample City',

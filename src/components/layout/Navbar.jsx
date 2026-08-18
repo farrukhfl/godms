@@ -1,8 +1,9 @@
-import { ChevronDown, Mail, Menu, Phone, X } from 'lucide-react'
+import { ChevronDown, LogOut, Mail, Menu, Phone, X } from 'lucide-react'
 import { useEffect, useState } from 'react'
-import { Link, useLocation } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { navGroups } from '../../data/navigation'
 import { siteConfig } from '../../data/siteConfig'
+import { clearSession, getAccessToken } from '../../utils/auth'
 import Button from '../ui/Button'
 import MegaMenu from './MegaMenu'
 import MobileMenu from './MobileMenu'
@@ -12,6 +13,8 @@ export default function Navbar() {
   const [activeMenu, setActiveMenu] = useState(null)
   const [isScrolled, setIsScrolled] = useState(false)
   const location = useLocation()
+  const navigate = useNavigate()
+  const signedIn = Boolean(getAccessToken())
 
   useEffect(() => {
     setMobileOpen(false)
@@ -31,6 +34,12 @@ export default function Navbar() {
     event.currentTarget.querySelector('button')?.focus()
   }
 
+  function handleSignOut() {
+    clearSession()
+    setMobileOpen(false)
+    navigate('/')
+  }
+
   return (
     <header className={`header-shell sticky top-0 z-50 bg-white/95 backdrop-blur transition-all duration-300 ${isScrolled ? 'shadow-lg shadow-navy/10' : 'shadow-sm'}`}>
       <div className={`overflow-hidden bg-primary-dark text-white transition-all duration-300 ${isScrolled ? 'max-h-0 opacity-0' : 'max-h-12 opacity-100'}`}>
@@ -42,7 +51,7 @@ export default function Navbar() {
 
       <div className={`mx-auto flex max-w-7xl items-center justify-between px-4 transition-all duration-300 sm:px-6 lg:px-8 ${isScrolled ? 'h-16' : 'h-20'}`}>
         <Link to="/" className="flex shrink-0 items-center" aria-label={`${siteConfig.company.fullName} home`}>
-          <img src="/logo.png" alt={siteConfig.company.fullName} width="1120" height="314" className={`header-logo h-auto object-contain transition-all duration-300 ${isScrolled ? 'w-36 sm:w-40' : 'w-40 sm:w-48'}`} />
+          <img src={siteConfig.company.logoUrl} alt={siteConfig.company.fullName} width="1120" height="314" className={`header-logo h-auto object-contain transition-all duration-300 ${isScrolled ? 'w-36 sm:w-40' : 'w-40 sm:w-48'}`} />
         </Link>
 
         <nav className="hidden items-center gap-1 xl:flex" aria-label="Main navigation">
@@ -77,7 +86,7 @@ export default function Navbar() {
         </nav>
 
         <div className="hidden items-center gap-3 xl:flex">
-          <Button href={siteConfig.signInUrl} target="_blank" rel="noreferrer" aria-label="Sign in (opens in a new tab)" variant="outline" className="px-4 py-2.5">Sign In</Button>
+          {signedIn ? <Button type="button" onClick={handleSignOut} variant="outline" className="px-4 py-2.5"><LogOut aria-hidden="true" size={16} /> Sign Out</Button> : <Button to={siteConfig.signInUrl} variant="outline" className="px-4 py-2.5">Sign In</Button>}
           <Link to="/contact" className="nav-link px-1 py-2 text-sm font-bold text-navy transition hover:text-primary">Contact Us</Link>
           <Button to="/open-an-account" className="px-4 py-2.5">Open An Account</Button>
         </div>
@@ -93,7 +102,7 @@ export default function Navbar() {
           {mobileOpen ? <X aria-hidden="true" className="nav-icon-enter" size={26} /> : <Menu aria-hidden="true" className="nav-icon-enter" size={26} />}
         </button>
       </div>
-      {mobileOpen && <MobileMenu onClose={() => setMobileOpen(false)} />}
+      {mobileOpen && <MobileMenu onClose={() => setMobileOpen(false)} signedIn={signedIn} onSignOut={handleSignOut} />}
     </header>
   )
 }

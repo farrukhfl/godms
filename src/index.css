@@ -217,7 +217,7 @@
   inset: auto 0 0;
   height: 2px;
   pointer-events: none;
-  background: linear-gradient(90deg, transparent 20%, rgb(72 128 255 / 0.75), rgb(255 255 255 / 0.75), transparent 80%);
+  background: linear-gradient(90deg, transparent 20%, rgb(12 121 247 / 0.75), rgb(255 255 255 / 0.75), transparent 80%);
   background-size: 200% 100%;
   animation: header-sheen 7s ease-in-out infinite;
 }
@@ -257,7 +257,7 @@
 .nav-icon-enter { animation: nav-icon-in 220ms cubic-bezier(0.16, 1, 0.3, 1) both; }
 
 .footer-glow { animation: blob-drift 11s ease-in-out infinite; }
-.footer-logo:hover { transform: translateY(-4px) rotate(-1deg); box-shadow: 0 22px 45px -18px rgb(72 128 255 / 0.55); }
+.footer-logo:hover { transform: translateY(-4px) rotate(-1deg); box-shadow: 0 22px 45px -18px rgb(12 121 247 / 0.55); }
 .footer-social:hover { transform: translateY(-4px) rotate(8deg) scale(1.08); }
 .footer-link { position: relative; }
 .footer-link::after {
