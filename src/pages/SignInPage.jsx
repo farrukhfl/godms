@@ -18,7 +18,7 @@ export default function SignInPage() {
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 
-  if (getAccessToken()) return <Navigate to={location.state?.from || '/open-an-account'} replace />
+  if (getAccessToken()) return <Navigate to={location.state?.from || '/'} replace />
 
   const submit = async (event) => {
     event.preventDefault()
@@ -38,7 +38,7 @@ export default function SignInPage() {
       const result = await response.json().catch(() => ({}))
       if (!response.ok || !result?.data?.accessToken) throw new Error(result.message || 'Sign in failed. Check your credentials and try again.')
       saveSession(result.data)
-      navigate(location.state?.from || '/open-an-account', { replace: true })
+      navigate(location.state?.from || '/', { replace: true })
     } catch (nextError) {
       setError(nextError.message || 'Unable to connect to the sign-in service.')
     } finally {
