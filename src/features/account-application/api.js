@@ -1,4 +1,4 @@
-import { clearSession, getAccessToken, getCurrentUser } from '../../utils/auth'
+import { clearCustomerToken, getCustomerAccessToken, getCustomerAgentId } from '../../utils/customerToken'
 
 const baseUrl = (import.meta.env.VITE_DRMS_API_BASE_URL || 'https://dev-derps.gotmsolutions.com/api').replace(/\/$/, '')
 
@@ -23,33 +23,34 @@ async function parseResponse(response) {
 }
 
 export async function applicationRequest(path, options = {}) {
+  const request = async (token) => fetch(`${baseUrl}/${String(path).replace(/^\//, '')}`, {
+    method: options.method || 'GET',
+    headers: {
+      ...(options.body instanceof FormData ? {} : { 'Content-Type': 'application/json' }),
+      Authorization: `Bearer ${token}`,
+    },
+    body: options.body instanceof FormData ? options.body : options.body ? JSON.stringify(options.body) : undefined,
+    signal: options.signal,
+  })
+
   let response
   try {
-    const token = getAccessToken()
-    response = await fetch(`${baseUrl}/${String(path).replace(/^\//, '')}`, {
-      method: options.method || 'GET',
-      headers: {
-        ...(options.body instanceof FormData ? {} : { 'Content-Type': 'application/json' }),
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      },
-      body: options.body instanceof FormData ? options.body : options.body ? JSON.stringify(options.body) : undefined,
-      signal: options.signal,
-    })
+    response = await request(await getCustomerAccessToken())
+    if (response.status === 401) {
+      clearCustomerToken()
+      response = await request(await getCustomerAccessToken({ force: true }))
+    }
   } catch (error) {
     if (error?.name === 'AbortError') throw error
     throw new Error('Unable to connect to the application service. Please try again shortly.')
   }
 
-  if (response.status === 401) {
-    clearSession()
-    window.dispatchEvent(new Event('godms-auth-expired'))
-  }
-
   return parseResponse(response)
 }
 
-export function saveApplication(body) {
-  return applicationRequest('application', { method: 'POST', body: { ...body, agentId: getCurrentUser()?.id } })
+export async function saveApplication(body) {
+  await getCustomerAccessToken()
+  return applicationRequest('application', { method: 'POST', body: { ...body, agentId: getCustomerAgentId() } })
 }
 
 export async function uploadApplicationFile(file, type) {

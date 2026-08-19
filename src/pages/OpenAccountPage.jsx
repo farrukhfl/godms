@@ -1,24 +1,13 @@
 import { Check, CheckCircle2 } from 'lucide-react'
-import { useEffect, useState } from 'react'
-import { Navigate } from 'react-router-dom'
+import { useState } from 'react'
 import Seo from '../components/Seo'
 import Button from '../components/ui/Button'
 import PricingDisclosure from '../components/ui/PricingDisclosure'
 import { siteConfig } from '../data/siteConfig'
 import ApplicationFlow from '../features/account-application/ApplicationFlow'
-import { getAccessToken } from '../utils/auth'
 
 export default function OpenAccountPage() {
   const [completedApplications, setCompletedApplications] = useState(null)
-  const [authenticated, setAuthenticated] = useState(() => Boolean(getAccessToken()))
-
-  useEffect(() => {
-    const handleExpiredSession = () => setAuthenticated(false)
-    window.addEventListener('godms-auth-expired', handleExpiredSession)
-    return () => window.removeEventListener('godms-auth-expired', handleExpiredSession)
-  }, [])
-
-  if (!authenticated) return <Navigate to="/sign-in" replace state={{ from: '/open-an-account' }} />
 
   return (
     <>

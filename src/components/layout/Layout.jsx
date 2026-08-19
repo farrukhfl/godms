@@ -1,8 +1,16 @@
+import { useEffect } from 'react'
 import { Outlet, ScrollRestoration } from 'react-router-dom'
+import { getCustomerAccessToken } from '../../utils/customerToken'
 import Footer from './Footer'
 import Navbar from './Navbar'
 
 export default function Layout() {
+  useEffect(() => {
+    getCustomerAccessToken().catch(() => {
+      // The application page will show a retryable error if the token service is unavailable.
+    })
+  }, [])
+
   return (
     <div className="flex min-h-screen flex-col">
       <a href="#main-content" className="fixed left-4 top-4 z-[100] -translate-y-24 rounded-lg bg-navy px-4 py-3 font-bold text-white shadow-lg transition focus:translate-y-0">Skip to main content</a>
