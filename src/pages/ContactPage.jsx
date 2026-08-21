@@ -9,14 +9,12 @@ import { solutions } from '../data/navigation'
 import { siteConfig } from '../data/siteConfig'
 import { postForm } from '../utils/api'
 
-const initialValues = { name: '', businessName: '', phone: '', email: '', service: '', message: '', website: '' }
+const initialValues = { name: '', businessName: '', email: '', service: '', message: '' }
 
 function validate(values) {
   const errors = {}
   if (!values.name.trim()) errors.name = 'Please enter your name.'
   if (!values.businessName.trim()) errors.businessName = 'Please enter your business name.'
-  if (!values.phone.trim()) errors.phone = 'Please enter your phone number.'
-  else if (values.phone.replace(/\D/g, '').length < 10) errors.phone = 'Enter a valid phone number with at least 10 digits.'
   if (!values.email.trim()) errors.email = 'Please enter your email address.'
   else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(values.email)) errors.email = 'Enter a valid email address.'
   if (!values.service) errors.service = 'Select the service you are interested in.'
@@ -51,19 +49,16 @@ export default function ContactPage() {
     setSubmitError('')
 
     try {
-      await postForm('/api/contact', {
+      await postForm('/contact-inquiry', {
         name: values.name,
-        businessName: values.businessName,
-        phone: values.phone,
         email: values.email,
-        solution: values.service,
+        businessName: values.businessName,
         message: values.message,
-        website: values.website,
+        service: values.service,
       })
       setSubmitted(true)
     } catch (error) {
-      const { solution, ...apiErrors } = error.fieldErrors || {}
-      const nextApiErrors = { ...apiErrors, ...(solution ? { service: solution } : {}) }
+      const nextApiErrors = error.fieldErrors || {}
       setErrors(nextApiErrors)
       setSubmitError(error.message)
       if (Object.keys(nextApiErrors).length > 0) {
@@ -100,7 +95,6 @@ export default function ContactPage() {
               </div>
             ) : (
               <form onSubmit={handleSubmit} noValidate>
-                <input type="text" name="website" value={values.website} onChange={handleChange} tabIndex="-1" autoComplete="off" aria-hidden="true" className="absolute -left-[10000px] h-px w-px overflow-hidden" />
                 {submitError && <p role="alert" className="mb-6 rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm font-semibold text-rose-700">{submitError}</p>}
                 <div className="grid gap-6 sm:grid-cols-2">
                   <FormField id="name" label="Name" error={errors.name} required>
@@ -108,9 +102,6 @@ export default function ContactPage() {
                   </FormField>
                   <FormField id="businessName" label="Business Name" error={errors.businessName} required>
                     <input id="businessName" name="businessName" type="text" autoComplete="organization" required value={values.businessName} onChange={handleChange} aria-invalid={Boolean(errors.businessName)} aria-describedby={errors.businessName ? 'businessName-error' : undefined} className={`${formControlClasses} ${errors.businessName ? 'border-rose-500' : ''}`} />
-                  </FormField>
-                  <FormField id="phone" label="Phone" error={errors.phone} required>
-                    <input id="phone" name="phone" type="tel" autoComplete="tel" required placeholder="(555) 555-0123" value={values.phone} onChange={handleChange} aria-invalid={Boolean(errors.phone)} aria-describedby={errors.phone ? 'phone-error' : undefined} className={`${formControlClasses} ${errors.phone ? 'border-rose-500' : ''}`} />
                   </FormField>
                   <FormField id="email" label="Email" error={errors.email} required>
                     <input id="email" name="email" type="email" autoComplete="email" required placeholder="you@business.com" value={values.email} onChange={handleChange} aria-invalid={Boolean(errors.email)} aria-describedby={errors.email ? 'email-error' : undefined} className={`${formControlClasses} ${errors.email ? 'border-rose-500' : ''}`} />
@@ -120,7 +111,7 @@ export default function ContactPage() {
                   <FormField id="service" label="Service Interested In" error={errors.service} required>
                     <select id="service" name="service" required value={values.service} onChange={handleChange} aria-invalid={Boolean(errors.service)} aria-describedby={errors.service ? 'service-error' : undefined} className={`${formControlClasses} ${errors.service ? 'border-rose-500' : ''}`}>
                       <option value="">Select a service</option>
-                      {solutions.map((solution) => <option key={solution.path} value={solution.label}>{solution.label}</option>)}
+                      {solutions.map((solution) => <option key={solution.path} value={solution.label === 'POS Solutions' ? 'POS' : solution.label}>{solution.label}</option>)}
                     </select>
                   </FormField>
                 </div>
