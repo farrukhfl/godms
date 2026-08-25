@@ -626,7 +626,7 @@ function PdfReviewModal({
   )
 }
 
-function validate(step, values, selectedSolutions, plans, products, shipments, checkedByApp, applications = []) {
+function validate(step, values, selectedSolutions, plans, products, shipments, checkedByApp, applications = [], catalog = {}) {
   const errors = {}
   const required = (key, message) => { if (!String(values[key] ?? '').trim()) errors[key] = message }
 
@@ -1285,7 +1285,7 @@ export default function ApplicationFlow({ onComplete }) {
   }
 
   const next = async () => {
-    const nextErrors = validate(step, values, solutions, plans, products, shipments, checkedByApp, applications)
+    const nextErrors = validate(step, values, solutions, plans, products, shipments, checkedByApp, applications, catalog)
     setErrors(nextErrors)
     setError('')
 
