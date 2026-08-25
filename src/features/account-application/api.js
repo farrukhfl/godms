@@ -63,3 +63,82 @@ export async function uploadApplicationFile(file, type) {
 export function unwrapData(result) {
   return result?.data ?? result
 }
+
+export function extractFileReference(result, fallbackName = 'signature.png') {
+  const data = unwrapData(result)
+  const fileObj = data?.merchantSignatureFileUrl || data?.fileUrl || data?.uploadedFiles || data
+  return {
+    url: fileObj?.url || (typeof fileObj === 'string' ? fileObj : null),
+    mimetype: fileObj?.mimetype || 'image/png',
+    originalname: fileObj?.originalname || fallbackName,
+  }
+}
+
+export function dataUrlToFile(dataUrl, filename = 'signature.png') {
+  const [header, encoded] = dataUrl.split(',')
+  const mime = header.match(/:(.*?);/)?.[1] || 'image/png'
+  const binary = atob(encoded)
+  const array = new Uint8Array(binary.length)
+  for (let i = 0; i < binary.length; i += 1) {
+    array[i] = binary.charCodeAt(i)
+  }
+  return new File([array], filename, { type: mime })
+}
+
+export async function signAgreementDocument(applicationId, agreementId, signatureFileUrl) {
+  return applicationRequest(`application/${applicationId}/agreement-documents/${agreementId}/sign`, {
+    method: 'PUT',
+    body: { signatureFileUrl },
+  })
+}
+
+export async function sendAgreementEmail(applicationId, to, unsignedFileUrl) {
+  return applicationRequest(`application/${applicationId}/send-agreement-email`, {
+    method: 'POST',
+    body: { to, unsignedFileUrl },
+  })
+}
+
+export async function fetchAgreementSummary(applicationId) {
+  try {
+    const result = await applicationRequest(`application/${applicationId}/agreement-documents/summary`)
+    const data = unwrapData(result)
+    return data?.envelopeSummaryFileUrl?.url ?? data?.summaryFileUrl?.url ?? data?.url ?? null
+  } catch {
+    return null
+  }
+}
+
+export async function downloadAgreementSummary(applicationId) {
+  const token = await getCustomerAccessToken()
+  const response = await fetch(`${baseUrl}/application/${applicationId}/agreement-documents/summary?download=true`, {
+    headers: { Authorization: `Bearer ${token}` },
+  })
+
+  if (!response.ok) {
+    throw new Error('Failed to download agreement summary.')
+  }
+
+  const contentType = response.headers.get('content-type') || ''
+  let blob
+
+  if (contentType.includes('application/json')) {
+    const json = await response.json().catch(() => ({}))
+    const url = json?.data?.summaryFileUrl?.url ?? json?.data?.url ?? json?.url
+    if (!url) throw new Error('Agreement summary file URL not found.')
+    const fileResponse = await fetch(url)
+    if (!fileResponse.ok) throw new Error('Failed to download summary document.')
+    blob = await fileResponse.blob()
+  } else {
+    blob = await response.blob()
+  }
+
+  const blobUrl = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = blobUrl
+  link.download = `agreement-summary-${applicationId}.pdf`
+  document.body.appendChild(link)
+  link.click()
+  link.remove()
+  URL.revokeObjectURL(blobUrl)
+}

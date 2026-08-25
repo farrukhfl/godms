@@ -7,23 +7,41 @@ import {
   CheckCircle2,
   CircleDollarSign,
   CreditCard,
+  Download,
+  Eye,
   FileCheck2,
+  FileText,
   Globe2,
+  Info,
   Landmark,
   LoaderCircle,
+  Mail,
   MonitorSmartphone,
   PackageCheck,
   PenLine,
+  PencilLine,
   ShoppingBasket,
   ShoppingCart,
   UserRound,
   WalletCards,
   Wind,
+  X,
 } from 'lucide-react'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import Button from '../../components/ui/Button'
 import FormField, { formControlClasses } from '../../components/ui/FormField'
-import { applicationRequest, saveApplication, unwrapData, uploadApplicationFile } from './api'
+import {
+  applicationRequest,
+  dataUrlToFile,
+  downloadAgreementSummary,
+  extractFileReference,
+  fetchAgreementSummary,
+  saveApplication,
+  sendAgreementEmail,
+  signAgreementDocument,
+  unwrapData,
+  uploadApplicationFile,
+} from './api'
 
 const steps = [
   ['Services', WalletCards],
@@ -37,8 +55,16 @@ const steps = [
   ['Submit', PenLine],
 ]
 
-const states = ['AL', 'AK', 'AZ', 'AR', 'CA', 'CO', 'CT', 'DE', 'FL', 'GA', 'HI', 'ID', 'IL', 'IN', 'IA', 'KS', 'KY', 'LA', 'ME', 'MD', 'MA', 'MI', 'MN', 'MS', 'MO', 'MT', 'NE', 'NV', 'NH', 'NJ', 'NM', 'NY', 'NC', 'ND', 'OH', 'OK', 'OR', 'PA', 'RI', 'SC', 'SD', 'TN', 'TX', 'UT', 'VT', 'VA', 'WA', 'WV', 'WI', 'WY', 'DC']
+const states = [
+  'AL', 'AK', 'AZ', 'AR', 'CA', 'CO', 'CT', 'DE', 'FL', 'GA',
+  'HI', 'ID', 'IL', 'IN', 'IA', 'KS', 'KY', 'LA', 'ME', 'MD',
+  'MA', 'MI', 'MN', 'MS', 'MO', 'MT', 'NE', 'NV', 'NH', 'NJ',
+  'NM', 'NY', 'NC', 'ND', 'OH', 'OK', 'OR', 'PA', 'RI', 'SC',
+  'SD', 'TN', 'TX', 'UT', 'VT', 'VA', 'WA', 'WV', 'WI', 'WY', 'DC',
+]
+
 const saleSolutions = new Set(['ebt', 'cash-advance', 'credit-card', 'pos', 'ach-processing'])
+
 const solutionIcons = {
   atm: Banknote,
   'credit-card': CreditCard,
@@ -49,8 +75,30 @@ const solutionIcons = {
   website: Globe2,
   'ach-processing': Landmark,
 }
+
+const serviceTitles = {
+  atm: 'ATM Solutions',
+  'credit-card': 'Credit Card Processing',
+  'cash-advance': 'Cash Advance',
+  pos: 'Point-Of-Sale Solutions',
+  ebt: 'EBT Processing',
+  airvac: 'AIRVAC Systems',
+  website: 'Website Services',
+  'ach-processing': 'ACH Processing',
+}
+
 const supportedSolutions = new Set(Object.keys(solutionIcons))
-const preferenceForms = { atm: 'atm1', 'credit-card': 'credit-card1', 'cash-advance': 'cash-advance1', pos: 'pos1', ebt: 'ebt1', airvac: 'airvac1', website: 'website1', 'ach-processing': 'ach-processing1' }
+
+const preferenceForms = {
+  atm: 'atm1',
+  'credit-card': 'credit-card1',
+  'cash-advance': 'cash-advance1',
+  pos: 'pos1',
+  ebt: 'ebt1',
+  airvac: 'airvac1',
+  website: 'website1',
+  'ach-processing': 'ach-processing1',
+}
 
 const initialValues = {
   legalName: '', legalAddress: '', legalZipCode: '', legalCity: '', legalState: '', contactNumber: '', ebtFnsNumber: '',
@@ -60,7 +108,7 @@ const initialValues = {
   bankName: '', accountNumber: '', routingNumber: '', bankFiles: [], taxCode: '', averageSale: '', maxSale: '', monthlySale: '', comment: '',
 }
 
-function digits(value, max) {
+function digits(value, max = 30) {
   return String(value || '').replace(/\D/g, '').slice(0, max)
 }
 
@@ -74,6 +122,110 @@ function phone(value) {
 function apiDate(value) {
   const match = String(value || '').match(/^(\d{4})-(\d{2})-(\d{2})$/)
   return match ? `${match[2]}/${match[3]}/${match[1]}` : value
+}
+
+function formatCardNumber(value) {
+  return String(value || '')
+    .replace(/\D/g, '')
+    .slice(0, 19)
+    .replace(/(.{4})/g, '$1 ')
+    .trim()
+}
+
+function formatExpiryInput(value) {
+  const raw = String(value || '').replace(/\D/g, '').slice(0, 6)
+  if (!raw) return ''
+  if (raw.length === 1) {
+    return parseInt(raw, 10) > 1 ? `0${raw}/` : raw
+  }
+  if (raw.length === 2) {
+    let month = parseInt(raw, 10)
+    if (month === 0) month = 1
+    if (month > 12) month = 12
+    return `${String(month).padStart(2, '0')}/`
+  }
+  if (raw.length <= 4) {
+    return `${raw.slice(0, 2)}/${raw.slice(2)}`
+  }
+  return `${raw.slice(0, 2)}/${raw.slice(2, 6)}`
+}
+
+function getAuthorizeExpirationDate(rawExpiryDate) {
+  if (!rawExpiryDate) return ''
+  const digitsOnly = String(rawExpiryDate).replace(/\D/g, '')
+  if (digitsOnly.length === 4) {
+    const month = parseInt(digitsOnly.slice(0, 2), 10)
+    if (month >= 1 && month <= 12) return digitsOnly
+  }
+  if (digitsOnly.length === 6) {
+    const month = digitsOnly.slice(0, 2)
+    const year = digitsOnly.slice(4, 6)
+    const monthNum = parseInt(month, 10)
+    if (monthNum >= 1 && monthNum <= 12) return `${month}${year}`
+  }
+  const match = String(rawExpiryDate).trim().match(/^(\d{1,2})\s*[/-]?\s*(\d{2}|\d{4})$/)
+  if (match) {
+    const month = match[1].padStart(2, '0')
+    let year = match[2]
+    if (year.length === 4) year = year.slice(-2)
+    const monthNum = parseInt(month, 10)
+    if (monthNum >= 1 && monthNum <= 12 && /^\d{2}$/.test(year)) {
+      return `${month}${year}`
+    }
+  }
+  return ''
+}
+
+function validateCardExpiry(rawExpiryDate) {
+  const authDate = getAuthorizeExpirationDate(rawExpiryDate)
+  if (!authDate || authDate.length !== 4) return 'Enter a valid expiry date (MM/YY).'
+  const month = parseInt(authDate.slice(0, 2), 10)
+  const year = 2000 + parseInt(authDate.slice(2, 4), 10)
+  const now = new Date()
+  const currentYear = now.getFullYear()
+  const currentMonth = now.getMonth() + 1
+  if (year < currentYear || (year === currentYear && month < currentMonth)) {
+    return 'Expiry date must be in the future.'
+  }
+  return null
+}
+
+function isValidLuhn(cardNumber) {
+  const digitsOnly = String(cardNumber || '').replace(/\D/g, '')
+  if (digitsOnly.length < 13 || digitsOnly.length > 19) return false
+  let sum = 0
+  let shouldDouble = false
+  for (let i = digitsOnly.length - 1; i >= 0; i -= 1) {
+    let digit = parseInt(digitsOnly[i], 10)
+    if (shouldDouble) {
+      digit *= 2
+      if (digit > 9) digit -= 9
+    }
+    sum += digit
+    shouldDouble = !shouldDouble
+  }
+  return sum % 10 === 0
+}
+
+function getServiceLabel(solution) {
+  return serviceTitles[solution] || String(solution || '').replaceAll('-', ' ')
+}
+
+function normalizeAgreementDocs(result) {
+  const data = unwrapData(result)
+  const rows = data?.agreementFileUrls || (Array.isArray(data) ? data : [])
+  return rows
+    .map((doc) => ({
+      agreementId: doc?.agreementId,
+      envelopeNumber: doc?.envelopeNumber,
+      status: doc?.status,
+      title: doc?.title || doc?.unsignedFileUrl?.originalname || 'Merchant Agreement',
+      url: doc?.signedFileUrl?.url || doc?.unsignedFileUrl?.url,
+      signed: Boolean(doc?.signedFileUrl?.url) || doc?.status === 'signed',
+      unsignedFileUrl: doc?.unsignedFileUrl || null,
+      signedFileUrl: doc?.signedFileUrl || null,
+    }))
+    .filter((doc) => doc.url)
 }
 
 function Field({ id, label, required, error, children, ...props }) {
@@ -127,75 +279,339 @@ function Progress({ current }) {
 }
 
 function StepTitle({ title, description }) {
-  return <div className="mb-7"><h2 className="text-2xl font-extrabold text-navy sm:text-3xl">{title}</h2><p className="mt-2 leading-7 text-slate-600">{description}</p></div>
+  return (
+    <div className="mb-7">
+      <h2 className="text-2xl font-extrabold text-navy sm:text-3xl">{title}</h2>
+      <p className="mt-2 leading-7 text-slate-600">{description}</p>
+    </div>
+  )
 }
 
-function SignaturePad({ onChange }) {
+function SignatureModal({ isOpen, onClose, onSubmit, isSigning }) {
   const canvasRef = useRef(null)
-  const drawing = useRef(false)
+  const drawingRef = useRef(false)
+  const [typedName, setTypedName] = useState('')
+  const [mode, setMode] = useState('draw')
+  const [error, setError] = useState('')
 
   useEffect(() => {
+    if (!isOpen || mode !== 'draw') return
     const canvas = canvasRef.current
-    const resize = () => {
-      const ratio = window.devicePixelRatio || 1
-      const width = canvas.clientWidth
-      canvas.width = width * ratio
-      canvas.height = 180 * ratio
-      const context = canvas.getContext('2d')
-      context.scale(ratio, ratio)
-      context.lineWidth = 2
-      context.lineCap = 'round'
-      context.strokeStyle = '#1e293b'
-    }
-    resize()
-  }, [])
+    if (!canvas) return
+    const ratio = Math.max(window.devicePixelRatio || 1, 2)
+    const rect = canvas.getBoundingClientRect()
+    canvas.width = rect.width * ratio
+    canvas.height = 160 * ratio
+    const context = canvas.getContext('2d')
+    context.scale(ratio, ratio)
+    context.lineWidth = 2.5
+    context.lineCap = 'round'
+    context.lineJoin = 'round'
+    context.strokeStyle = '#0f172a'
+  }, [isOpen, mode])
 
-  const point = (event) => {
-    const rect = canvasRef.current.getBoundingClientRect()
+  if (!isOpen) return null
+
+  const getCoordinates = (event) => {
+    const canvas = canvasRef.current
+    if (!canvas) return [0, 0]
+    const rect = canvas.getBoundingClientRect()
     return [event.clientX - rect.left, event.clientY - rect.top]
   }
-  const start = (event) => {
-    drawing.current = true
-    const context = canvasRef.current.getContext('2d')
-    const [x, y] = point(event)
+
+  const handlePointerDown = (event) => {
+    drawingRef.current = true
+    setError('')
+    const canvas = canvasRef.current
+    const context = canvas.getContext('2d')
+    const [x, y] = getCoordinates(event)
     context.beginPath()
     context.moveTo(x, y)
     event.currentTarget.setPointerCapture(event.pointerId)
   }
-  const move = (event) => {
-    if (!drawing.current) return
-    const [x, y] = point(event)
-    const context = canvasRef.current.getContext('2d')
+
+  const handlePointerMove = (event) => {
+    if (!drawingRef.current) return
+    const canvas = canvasRef.current
+    const context = canvas.getContext('2d')
+    const [x, y] = getCoordinates(event)
     context.lineTo(x, y)
     context.stroke()
   }
-  const end = () => {
-    if (!drawing.current) return
-    drawing.current = false
-    onChange(canvasRef.current.toDataURL('image/png'))
-  }
-  const clear = () => {
-    const canvas = canvasRef.current
-    canvas.getContext('2d').clearRect(0, 0, canvas.width, canvas.height)
-    onChange('')
+
+  const handlePointerUp = () => {
+    drawingRef.current = false
   }
 
-  return <div><canvas ref={canvasRef} onPointerDown={start} onPointerMove={move} onPointerUp={end} onPointerCancel={end} className="h-[180px] w-full touch-none rounded-xl border border-slate-300 bg-white" aria-label="Draw your signature" /><button type="button" onClick={clear} className="mt-2 text-sm font-bold text-primary">Clear signature</button></div>
+  const handleClear = () => {
+    if (mode === 'draw') {
+      const canvas = canvasRef.current
+      if (canvas) {
+        const context = canvas.getContext('2d')
+        context.clearRect(0, 0, canvas.width, canvas.height)
+      }
+    } else {
+      setTypedName('')
+    }
+    setError('')
+  }
+
+  const handleSave = () => {
+    if (mode === 'draw') {
+      const canvas = canvasRef.current
+      if (!canvas) return
+      // Check if blank
+      const context = canvas.getContext('2d')
+      const pixelBuffer = new Uint32Array(
+        context.getImageData(0, 0, canvas.width, canvas.height).data.buffer
+      )
+      const hasDrawing = pixelBuffer.some((color) => color !== 0)
+      if (!hasDrawing) {
+        setError('Please draw your signature before submitting.')
+        return
+      }
+      onSubmit(canvas.toDataURL('image/png'))
+    } else {
+      if (!typedName.trim()) {
+        setError('Please type your name before submitting.')
+        return
+      }
+      const canvas = document.createElement('canvas')
+      canvas.width = 500
+      canvas.height = 150
+      const ctx = canvas.getContext('2d')
+      ctx.fillStyle = '#ffffff'
+      ctx.fillRect(0, 0, canvas.width, canvas.height)
+      ctx.font = 'italic 44px "Brush Script MT", cursive, sans-serif'
+      ctx.fillStyle = '#0f172a'
+      ctx.textBaseline = 'middle'
+      ctx.fillText(typedName.trim(), 30, 75)
+      onSubmit(canvas.toDataURL('image/png'))
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm">
+      <div className="w-full max-w-lg rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl">
+        <div className="flex items-center justify-between">
+          <h3 className="text-xl font-extrabold text-navy">Provide Your Signature</h3>
+          <button type="button" onClick={onClose} disabled={isSigning} className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700">
+            <X size={20} />
+          </button>
+        </div>
+        <p className="mt-1 text-sm text-slate-600">Please sign below to authorize and complete your merchant agreement.</p>
+
+        <div className="mt-4 flex rounded-xl bg-slate-100 p-1 text-sm font-bold">
+          <button
+            type="button"
+            onClick={() => setMode('draw')}
+            className={`flex-1 rounded-lg py-2 transition ${mode === 'draw' ? 'bg-white text-primary shadow-sm' : 'text-slate-600 hover:text-navy'}`}
+          >
+            Draw Signature
+          </button>
+          <button
+            type="button"
+            onClick={() => setMode('type')}
+            className={`flex-1 rounded-lg py-2 transition ${mode === 'type' ? 'bg-white text-primary shadow-sm' : 'text-slate-600 hover:text-navy'}`}
+          >
+            Type Signature
+          </button>
+        </div>
+
+        {error && <p className="mt-3 text-sm font-bold text-rose-600">{error}</p>}
+
+        <div className="mt-4">
+          {mode === 'draw' ? (
+            <div className="relative">
+              <canvas
+                ref={canvasRef}
+                onPointerDown={handlePointerDown}
+                onPointerMove={handlePointerMove}
+                onPointerUp={handlePointerUp}
+                onPointerCancel={handlePointerUp}
+                className="h-40 w-full touch-none rounded-xl border-2 border-dashed border-slate-300 bg-slate-50"
+                aria-label="Draw signature"
+              />
+              <span className="pointer-events-none absolute bottom-2 right-3 text-xs font-semibold text-slate-400">Sign above line</span>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <input
+                type="text"
+                placeholder="Type your full legal name"
+                value={typedName}
+                onChange={(e) => setTypedName(e.target.value)}
+                className={`${formControlClasses} font-medium`}
+              />
+              {typedName && (
+                <div className="flex h-24 items-center justify-center rounded-xl border-2 border-dashed border-slate-300 bg-slate-50 px-4">
+                  <span className="font-serif text-3xl italic text-navy">{typedName}</span>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        <div className="mt-6 flex items-center justify-between gap-3">
+          <button
+            type="button"
+            onClick={handleClear}
+            disabled={isSigning}
+            className="text-sm font-bold text-slate-500 hover:text-slate-800"
+          >
+            Clear
+          </button>
+          <div className="flex gap-2">
+            <Button type="button" variant="outline" onClick={onClose} disabled={isSigning}>
+              Cancel
+            </Button>
+            <Button type="button" onClick={handleSave} disabled={isSigning}>
+              {isSigning ? <><LoaderCircle className="animate-spin" size={16} /> Signing...</> : 'Submit Signature'}
+            </Button>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
 }
 
-function dataUrlFile(value) {
-  const [header, encoded] = value.split(',')
-  const mime = header.match(/:(.*?);/)?.[1] || 'image/png'
-  const bytes = atob(encoded)
-  const array = new Uint8Array(bytes.length)
-  for (let index = 0; index < bytes.length; index += 1) array[index] = bytes.charCodeAt(index)
-  return new File([array], 'signature.png', { type: mime })
+function PdfReviewModal({
+  isOpen,
+  onClose,
+  documents,
+  activeDocIndex,
+  onSelectDocIndex,
+  viewingSummary,
+  summaryUrl,
+  onToggleSummary,
+  onDownloadSummary,
+  onOpenSignModal,
+  onSubmitFinal,
+  isAllSigned,
+}) {
+  if (!isOpen) return null
+
+  const activeDoc = documents[activeDocIndex] || null
+  const currentUrl = viewingSummary && summaryUrl ? summaryUrl : activeDoc?.url
+
+  return (
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-900/60 p-3 sm:p-6 backdrop-blur-sm">
+      <div className="flex h-[92vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
+        {/* Header */}
+        <div className="flex shrink-0 items-center justify-between border-b border-slate-200 px-5 py-4">
+          <div className="flex min-w-0 items-center gap-3">
+            <FileText className="shrink-0 text-primary" size={24} />
+            <div className="min-w-0">
+              <h3 className="truncate font-extrabold text-navy">
+                {viewingSummary ? 'Agreement Summary' : activeDoc?.title || 'Merchant Agreement'}
+              </h3>
+              <p className="text-xs font-semibold text-slate-500">
+                {viewingSummary
+                  ? 'Official combined agreement summary'
+                  : activeDoc?.signed
+                    ? '✓ Signed document'
+                    : 'Review and sign document'}
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-3">
+            {!viewingSummary && documents.length > 1 && (
+              <div className="flex items-center gap-2 rounded-xl bg-slate-100 p-1 text-xs font-bold text-slate-700">
+                <button
+                  type="button"
+                  disabled={activeDocIndex <= 0}
+                  onClick={() => onSelectDocIndex(activeDocIndex - 1)}
+                  className="rounded-lg px-2.5 py-1 transition hover:bg-white disabled:opacity-40"
+                >
+                  Prev
+                </button>
+                <span>{activeDocIndex + 1} / {documents.length}</span>
+                <button
+                  type="button"
+                  disabled={activeDocIndex >= documents.length - 1}
+                  onClick={() => onSelectDocIndex(activeDocIndex + 1)}
+                  className="rounded-lg px-2.5 py-1 transition hover:bg-white disabled:opacity-40"
+                >
+                  Next
+                </button>
+              </div>
+            )}
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-xl p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+            >
+              <X size={20} />
+            </button>
+          </div>
+        </div>
+
+        {/* PDF Viewer */}
+        <div className="min-h-0 flex-1 bg-slate-100 p-2 sm:p-4">
+          {currentUrl ? (
+            <iframe
+              key={currentUrl}
+              src={`${currentUrl}#toolbar=1&navpanes=0&view=FitH`}
+              title={viewingSummary ? 'Agreement Summary' : activeDoc?.title || 'Agreement'}
+              className="h-full w-full rounded-xl border border-slate-200 bg-white"
+            />
+          ) : (
+            <div className="flex h-full items-center justify-center text-sm font-semibold text-slate-500">
+              No document preview available.
+            </div>
+          )}
+        </div>
+
+        {/* Footer Actions */}
+        <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-t border-slate-200 bg-white px-5 py-4">
+          <div className="flex items-center gap-2">
+            {activeDoc?.signed && !viewingSummary && (
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-700">
+                <Check size={14} /> Signed
+              </span>
+            )}
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            {!activeDoc?.signed && !viewingSummary ? (
+              <Button type="button" onClick={onOpenSignModal}>
+                <PencilLine size={16} /> Sign Agreement
+              </Button>
+            ) : (
+              <>
+                {summaryUrl && (
+                  <Button type="button" variant="outline" onClick={onToggleSummary}>
+                    {viewingSummary ? <><Eye size={16} /> View Agreement</> : <><FileText size={16} /> View Summary</>}
+                  </Button>
+                )}
+                {summaryUrl && (
+                  <Button type="button" variant="outline" onClick={onDownloadSummary}>
+                    <Download size={16} /> Download Summary
+                  </Button>
+                )}
+                {isAllSigned && (
+                  <Button type="button" onClick={onSubmitFinal}>
+                    Submit Application <CheckCircle2 size={16} />
+                  </Button>
+                )}
+              </>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  )
 }
 
-function validate(step, values, selectedSolutions, plans, products, shipments, accepted, signature, signatureMethod) {
+function validate(step, values, selectedSolutions, plans, products, shipments, checkedByApp, applications = []) {
   const errors = {}
   const required = (key, message) => { if (!String(values[key] ?? '').trim()) errors[key] = message }
-  if (step === 0 && selectedSolutions.length === 0) errors.solutions = 'Select at least one service.'
+
+  if (step === 0 && selectedSolutions.length === 0) {
+    errors.solutions = 'Select at least one service.'
+  }
+
   if (step === 1) {
     ['legalName', 'legalAddress', 'legalZipCode', 'legalCity', 'legalState', 'contactNumber', 'taxType', 'feinNumber', 'ownerShipType', 'businessType', 'email', 'productsDescription'].forEach((key) => required(key, 'This field is required.'))
     if (digits(values.contactNumber, 20).length < 10) errors.contactNumber = 'Enter a valid 10-digit phone number.'
@@ -204,29 +620,73 @@ function validate(step, values, selectedSolutions, plans, products, shipments, a
     if (selectedSolutions.includes('ebt')) required('ebtFnsNumber', 'FNS number is required for EBT processing.')
     if (!values.sameAsLegal) ['businessName', 'dbaAddress', 'businessZipCode', 'businessCity', 'businessState', 'dbaPhoneNumber'].forEach((key) => required(key, 'This field is required.'))
   }
+
   if (step === 2) {
     ['ownerFirstName', 'ownerLastName', 'date', 'residentialAddress', 'ownerShipZip', 'ownerShipCity', 'ownerShipState', 'ownerPhoneNumber', 'ownerEmail', 'socialSecurityNumber'].forEach((key) => required(key, 'This field is required.'))
     if (digits(values.ownerPhoneNumber, 20).length < 10) errors.ownerPhoneNumber = 'Enter a valid 10-digit phone number.'
     if (digits(values.socialSecurityNumber, 20).length !== 9) errors.socialSecurityNumber = 'Enter a valid 9-digit Social Security number.'
     if (!values.dLFiles.length) errors.dLFiles = 'Upload a driver license or government-issued ID.'
   }
+
   if (step === 3) {
     ['accountNumber', 'routingNumber'].forEach((key) => required(key, 'This field is required.'))
     if (!values.bankFiles.length) errors.bankFiles = 'Upload a void check or bank letter.'
-    if (selectedSolutions.some((solution) => saleSolutions.has(solution))) ['averageSale', 'maxSale', 'monthlySale'].forEach((key) => required(key, 'This field is required.'))
+    if (selectedSolutions.some((solution) => saleSolutions.has(solution))) {
+      ['averageSale', 'maxSale', 'monthlySale'].forEach((key) => required(key, 'This field is required.'))
+    }
   }
-  if (step === 4 && Object.keys(plans).length < selectedSolutions.length) errors.plan = 'Select one plan for each service.'
-  if (step === 5 && Object.values(products).some((selection) => !selection.own && !Object.values(selection.items || {}).some((quantity) => quantity > 0))) errors.products = 'Select hardware or indicate that you already own hardware for each service.'
-  if (step === 7) Object.entries(shipments).forEach(([id, form]) => {
-    if (form.type === 'Shipping' && (!form.recipientName || !form.recipientPhone || !form.email || !form.address || !form.zipCode || !form.country || !form.state)) errors[`shipment-${id}`] = 'Complete all required shipping fields.'
-    if (form.type === 'Pickup' && (!form.pickupLocationName || !form.contactName || !form.pickupDate)) errors[`shipment-${id}`] = 'Complete all required pickup fields.'
-    if (form.type !== 'MerchantOwned' && form.paymentType === 'Pay Now' && (!form.nameOnCard || digits(form.cardNumber, 30).length < 13 || !form.expiryDate || !form.cvv || !form.billingAddress)) errors[`payment-${id}`] = 'Complete all required card details.'
-    if (form.type !== 'MerchantOwned' && form.paymentType === 'Lease' && (!form.leaseTerm || !form.monthlyPayment || !form.startDate || !form.billingAddress)) errors[`payment-${id}`] = 'Complete all required lease details.'
-  })
+
+  if (step === 4 && Object.keys(plans).length < selectedSolutions.length) {
+    errors.plan = 'Select one plan for each service.'
+  }
+
+  if (step === 5 && Object.values(products).some((selection) => !selection.own && !Object.values(selection.items || {}).some((quantity) => quantity > 0))) {
+    errors.products = 'Select hardware or indicate that you already own hardware for each service.'
+  }
+
+  if (step === 7) {
+    Object.entries(shipments).forEach(([id, form]) => {
+      const isMerchantOwned = form.type === 'MerchantOwned' || products[id]?.own
+      if (!isMerchantOwned) {
+        if (form.type === 'Shipping') {
+          if (!form.recipientName || !form.recipientPhone || !form.email || !form.address || !form.zipCode || !form.state) {
+            errors[`shipment-${id}`] = 'Complete all required shipping fields.'
+          } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) {
+            errors[`shipment-${id}`] = 'Enter a valid email address for shipping.'
+          }
+        }
+        if (form.type === 'Pickup') {
+          if (!form.pickupLocationName || !form.contactName || !form.pickupDate) {
+            errors[`shipment-${id}`] = 'Complete all required pickup fields.'
+          }
+        }
+        if (form.paymentType === 'Pay Now') {
+          const cleanCard = digits(form.cardNumber, 20)
+          if (!form.nameOnCard || cleanCard.length < 13 || !form.expiryDate || !form.cvv || !form.billingAddress) {
+            errors[`payment-${id}`] = 'Complete all required card details.'
+          } else if (!isValidLuhn(cleanCard)) {
+            errors[`payment-${id}`] = 'Enter a valid card number.'
+          } else {
+            const expiryError = validateCardExpiry(form.expiryDate)
+            if (expiryError) errors[`payment-${id}`] = expiryError
+          }
+        }
+        if (form.paymentType === 'Lease') {
+          if (!form.leaseTerm || !form.monthlyPayment || !form.startDate || !form.billingAddress) {
+            errors[`payment-${id}`] = 'Complete all required lease details.'
+          }
+        }
+      }
+    })
+  }
+
   if (step === 8) {
-    if (!accepted) errors.accepted = 'Accept the terms and conditions to submit.'
-    if (signatureMethod === 'electronic' && !signature) errors.signature = 'Draw your signature to continue.'
+    const uncheckedApp = applications.find((app) => !checkedByApp[app.applicationId])
+    if (uncheckedApp) {
+      errors.accepted = `Please agree to the terms and conditions for ${getServiceLabel(uncheckedApp.solution)} before submitting.`
+    }
   }
+
   return errors
 }
 
@@ -241,161 +701,631 @@ export default function ApplicationFlow({ onComplete }) {
   const [preferences, setPreferences] = useState({})
   const [shipments, setShipments] = useState({})
   const [agreements, setAgreements] = useState({})
-  const [accepted, setAccepted] = useState(false)
-  const [signatureMethod, setSignatureMethod] = useState('electronic')
-  const [signature, setSignature] = useState('')
+  const [checkedByApp, setCheckedByApp] = useState({})
+  const [signMethodByApp, setSignMethodByApp] = useState({})
+  const [signedByApp, setSignedByApp] = useState({})
+  const [emailSentByApp, setEmailSentByApp] = useState({})
+  const [summaryUrlByApp, setSummaryUrlByApp] = useState({})
+  const [uploadedSignatures, setUploadedSignatures] = useState({})
   const [errors, setErrors] = useState({})
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const [loadingData, setLoadingData] = useState(true)
+  const [loadingAgreements, setLoadingAgreements] = useState(false)
+  const [sendingEmail, setSendingEmail] = useState(false)
+  const [isPdfModalOpen, setIsPdfModalOpen] = useState(false)
+  const [showSignatureModal, setShowSignatureModal] = useState(false)
+  const [activeAppId, setActiveAppId] = useState(null)
+  const [activeDocIndex, setActiveDocIndex] = useState(0)
+  const [viewingSummary, setViewingSummary] = useState(false)
+  const [isSigningDoc, setIsSigningDoc] = useState(false)
   const topRef = useRef(null)
 
-  const applicationIds = applications.map((item) => item.applicationId)
+  const applicationIds = useMemo(() => applications.map((item) => item.applicationId).filter(Boolean), [applications])
+
   const change = (key, value) => {
     setValues((current) => ({ ...current, [key]: value }))
     setErrors((current) => ({ ...current, [key]: '' }))
   }
 
+  // Load service categories on mount
   useEffect(() => {
     const controller = new AbortController()
     applicationRequest('item-category/', { signal: controller.signal })
       .then((result) => {
-        setCatalog((current) => ({ ...current, services: (unwrapData(result) || []).filter((service) => supportedSolutions.has(service.solution)) }))
+        const rawServices = unwrapData(result) || []
+        const filtered = rawServices.filter((service) => supportedSolutions.has(service.solution))
+        setCatalog((current) => ({ ...current, services: filtered }))
         setError('')
       })
-      .catch((nextError) => { if (nextError.name !== 'AbortError') setError(nextError.message) })
-      .finally(() => { if (!controller.signal.aborted) setLoadingData(false) })
+      .catch((nextError) => {
+        if (nextError.name !== 'AbortError') setError(nextError.message)
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setLoadingData(false)
+      })
     return () => controller.abort()
   }, [])
 
+  // Load plans for step 4
   useEffect(() => {
     if (step !== 4 || catalog.plans.length) return
-    applicationRequest('price-plan').then((result) => setCatalog((current) => ({ ...current, plans: unwrapData(result) || [] }))).catch((nextError) => setError(nextError.message))
+    applicationRequest('price-plan')
+      .then((result) => setCatalog((current) => ({ ...current, plans: unwrapData(result) || [] })))
+      .catch((nextError) => setError(nextError.message))
   }, [step, catalog.plans.length])
 
+  // Load hardware for step 5
   useEffect(() => {
     if (step !== 5 || catalog.products.length) return
-    applicationRequest('item-services').then((result) => setCatalog((current) => ({ ...current, products: unwrapData(result) || [] }))).catch((nextError) => setError(nextError.message))
+    applicationRequest('item-services')
+      .then((result) => setCatalog((current) => ({ ...current, products: unwrapData(result) || [] })))
+      .catch((nextError) => setError(nextError.message))
   }, [step, catalog.products.length])
 
+  // Load preferences for steps 6 and 7
   useEffect(() => {
     if ((step !== 6 && step !== 7) || catalog.preferences.length) return
-    applicationRequest('application-preferences').then((result) => setCatalog((current) => ({ ...current, preferences: unwrapData(result) || [] }))).catch((nextError) => setError(nextError.message))
+    applicationRequest('application-preferences')
+      .then((result) => setCatalog((current) => ({ ...current, preferences: unwrapData(result) || [] })))
+      .catch((nextError) => setError(nextError.message))
   }, [step, catalog.preferences.length])
 
-  useEffect(() => {
-    if (step !== 8 || !applications.length) return
-    Promise.all(applications.map(async (application) => {
-      const ownsHardware = products[application.applicationId]?.own
-      const categoryQuery = ownsHardware && application.categoryId ? `?categoryIds=${application.categoryId}` : ''
-      const result = await applicationRequest(`application/${application.applicationId}/agreement-documents${categoryQuery}`)
-      return [application.applicationId, unwrapData(result)?.agreementFileUrls || []]
-    })).then((entries) => setAgreements(Object.fromEntries(entries))).catch((nextError) => setError(nextError.message))
-  }, [step, applications, products])
-
+  // Initialize shipments & products for applications
   useEffect(() => {
     if (!applications.length || Object.keys(shipments).length) return
     const forms = {}
     const selections = {}
+    const checked = {}
+    const signMethods = {}
     applications.forEach((application) => {
-      forms[application.applicationId] = { type: 'Shipping', paymentType: 'Pay Now', recipientName: '', companyName: '', recipientPhone: '', email: values.email, address: values.dbaAddress || values.legalAddress, floorStreet: '', zipCode: values.businessZipCode || values.legalZipCode, country: 'United States', state: values.businessState || values.legalState, pickupLocationName: '', contactName: '', pickupDate: '', specialInstructions: '', nameOnCard: '', cardNumber: '', expiryDate: '', cvv: '', billingAddress: '', leaseTerm: '', monthlyPayment: '', startDate: '' }
+      forms[application.applicationId] = {
+        type: 'Shipping',
+        paymentType: 'Pay Now',
+        recipientName: values.businessName || values.legalName || '',
+        companyName: values.businessName || '',
+        recipientPhone: values.contactNumber || '',
+        email: values.email || '',
+        address: values.dbaAddress || values.legalAddress || '',
+        floorStreet: '',
+        zipCode: values.businessZipCode || values.legalZipCode || '',
+        country: 'United States',
+        state: values.businessState || values.legalState || '',
+        pickupLocationName: values.businessName || '',
+        contactName: values.ownerFirstName ? `${values.ownerFirstName} ${values.ownerLastName}` : '',
+        pickupDate: '',
+        specialInstructions: '',
+        nameOnCard: values.businessName || values.legalName || '',
+        cardNumber: '',
+        expiryDate: '',
+        cvv: '',
+        billingAddress: values.dbaAddress || values.legalAddress || '',
+        leaseTerm: '',
+        monthlyPayment: '',
+        startDate: '',
+      }
       selections[application.applicationId] = { own: false, items: {} }
+      checked[application.applicationId] = false
+      signMethods[application.applicationId] = 'electronic'
     })
     setShipments(forms)
     setProducts(selections)
+    setCheckedByApp((current) => ({ ...checked, ...current }))
+    setSignMethodByApp((current) => ({ ...signMethods, ...current }))
   }, [applications, shipments, values])
+
+  // Fetch agreement documents for Step 8
+  useEffect(() => {
+    if (step !== 8 || !applications.length) return
+    let isMounted = true
+    setLoadingAgreements(true)
+    setError('')
+
+    Promise.all(
+      applications.map(async (application) => {
+        try {
+          const ownsHardware = products[application.applicationId]?.own
+          const catId = application.categoryId || catalog.services.find((s) => s.solution === application.solution)?.id
+          const query = ownsHardware && catId ? `?categoryIds=${encodeURIComponent(catId)}` : ''
+          const result = await applicationRequest(`application/${application.applicationId}/agreement-documents${query}`)
+          const docs = normalizeAgreementDocs(result)
+          return [application.applicationId, docs]
+        } catch {
+          return [application.applicationId, []]
+        }
+      })
+    )
+      .then((entries) => {
+        if (!isMounted) return
+        const docsByApp = Object.fromEntries(entries)
+        setAgreements(docsByApp)
+
+        // Mark apps where all docs are signed
+        setSignedByApp((prev) => {
+          const next = { ...prev }
+          Object.entries(docsByApp).forEach(([appId, docs]) => {
+            if (docs.length > 0) {
+              next[appId] = docs.every((doc) => doc.signed)
+            }
+          })
+          return next
+        })
+
+        // Fetch agreement summaries for apps that are already all signed
+        Object.entries(docsByApp).forEach(([appId, docs]) => {
+          if (docs.length > 0 && docs.every((doc) => doc.signed)) {
+            fetchAgreementSummary(appId).then((url) => {
+              if (url && isMounted) {
+                setSummaryUrlByApp((prev) => ({ ...prev, [appId]: url }))
+              }
+            })
+          }
+        })
+      })
+      .catch((err) => {
+        if (isMounted) setError(err.message || 'Failed to load agreements.')
+      })
+      .finally(() => {
+        if (isMounted) setLoadingAgreements(false)
+      })
+
+    return () => {
+      isMounted = false
+    }
+  }, [step, applications, products, catalog.services])
 
   const uploadFiles = async (files, type) => Promise.all(files.map(async (file) => {
     const result = unwrapData(await uploadApplicationFile(file, type))
     return result?.dLFileUrl || result?.bankLetterFileUrl || result?.fileUrl || result
   }))
 
+  const getInStockTotal = (applicationId) => {
+    const selection = products[applicationId] || { own: false, items: {} }
+    if (selection.own) return 0
+    return Object.entries(selection.items || {}).reduce((total, [id, qty]) => {
+      if (!qty || qty <= 0) return total
+      const item = catalog.products.find((p) => String(p.id) === String(id))
+      if (!item) return total
+      const price = Number(item.sellingPrice ?? item.price ?? 0)
+      return total + price * qty
+    }, 0)
+  }
+
   const saveCurrentStep = async () => {
     if (step === 0) {
       const result = unwrapData(await saveApplication({ currentStep: 1, solutions, applicationId: null }))
       const raw = result?.applications || []
       const fallback = result?.applicationId || result?.id
-      const normalized = (raw.length ? raw : solutions.map((solution) => ({ solution, applicationId: fallback }))).map((item, index) => ({ ...item, solution: item.solution || solutions[index], applicationId: item.applicationId || item.id || fallback, categoryId: catalog.services.find((service) => service.solution === (item.solution || solutions[index]))?.id })).filter((item) => item.applicationId)
+      const selectedServices = catalog.services.filter((s) => solutions.includes(s.solution))
+      const categoryIdBySolution = Object.fromEntries(selectedServices.map((s) => [s.solution, s.id]))
+
+      const normalized = (raw.length ? raw : solutions.map((solution) => ({ solution, applicationId: fallback }))).map((item, index) => {
+        const solution = item.solution || solutions[index]
+        const categoryId = item.categoryId || categoryIdBySolution[solution] || catalog.services.find((s) => s.solution === solution)?.id || null
+        return {
+          ...item,
+          solution,
+          applicationId: item.applicationId || item.id || fallback,
+          categoryId,
+        }
+      }).filter((item) => item.applicationId)
+
       if (!normalized.length) throw new Error('The application service did not return an application ID.')
       setApplications(normalized)
       return
     }
+
     if (step === 1) {
-      await saveApplication({ currentStep: 2, legalName: values.legalName, legalAddress: values.legalAddress, legalZipCode: values.legalZipCode, legalCity: values.legalCity, legalState: values.legalState, contactNumber: values.contactNumber, ebtFnsNumber: values.ebtFnsNumber || undefined, businessName: values.sameAsLegal ? values.legalName : values.businessName, dbaAddress: values.sameAsLegal ? values.legalAddress : values.dbaAddress, businessZipCode: values.sameAsLegal ? values.legalZipCode : values.businessZipCode, businessCity: values.sameAsLegal ? values.legalCity : values.businessCity, businessState: values.sameAsLegal ? values.legalState : values.businessState, dbaPhoneNumber: values.sameAsLegal ? values.contactNumber : values.dbaPhoneNumber, taxType: values.taxType, feinNumber: values.feinNumber, ownerShipType: values.ownerShipType, businessStartDate: values.businessStartDate ? apiDate(values.businessStartDate) : undefined, businessType: values.businessType, email: values.email, website: values.website || undefined, productsDescription: values.productsDescription, source: 'website', applicationIds })
+      await saveApplication({
+        currentStep: 2,
+        legalName: values.legalName,
+        legalAddress: values.legalAddress,
+        legalZipCode: values.legalZipCode,
+        legalCity: values.legalCity,
+        legalState: values.legalState,
+        contactNumber: values.contactNumber,
+        ebtFnsNumber: values.ebtFnsNumber || undefined,
+        businessName: values.sameAsLegal ? values.legalName : values.businessName,
+        dbaAddress: values.sameAsLegal ? values.legalAddress : values.dbaAddress,
+        businessZipCode: values.sameAsLegal ? values.legalZipCode : values.businessZipCode,
+        businessCity: values.sameAsLegal ? values.legalCity : values.businessCity,
+        businessState: values.sameAsLegal ? values.legalState : values.businessState,
+        dbaPhoneNumber: values.sameAsLegal ? values.contactNumber : values.dbaPhoneNumber,
+        taxType: values.taxType,
+        feinNumber: values.feinNumber,
+        ownerShipType: values.ownerShipType,
+        businessStartDate: values.businessStartDate ? apiDate(values.businessStartDate) : undefined,
+        businessType: values.businessType,
+        email: values.email,
+        website: values.website || undefined,
+        productsDescription: values.productsDescription,
+        source: 'website',
+        applicationIds,
+      })
       return
     }
+
     if (step === 2) {
       const dLFileUrl = await uploadFiles(values.dLFiles, 'applications')
-      await saveApplication({ currentStep: 3, merchantFirstName: values.ownerFirstName, merchantLastName: values.ownerLastName, ownerFirstName: values.ownerFirstName, ownerLastName: values.ownerLastName, date: apiDate(values.date), residentialAddress: values.residentialAddress, ownerShipState: values.ownerShipState, ownerShipCity: values.ownerShipCity, ownerShipZip: values.ownerShipZip, socialSecurityNumber: values.socialSecurityNumber, ownerEmail: values.ownerEmail, ownerPhoneNumber: values.ownerPhoneNumber, dLFileUrl, applicationIds })
+      await saveApplication({
+        currentStep: 3,
+        merchantFirstName: values.ownerFirstName,
+        merchantLastName: values.ownerLastName,
+        ownerFirstName: values.ownerFirstName,
+        ownerLastName: values.ownerLastName,
+        date: apiDate(values.date),
+        residentialAddress: values.residentialAddress,
+        ownerShipState: values.ownerShipState,
+        ownerShipCity: values.ownerShipCity,
+        ownerShipZip: values.ownerShipZip,
+        socialSecurityNumber: values.socialSecurityNumber,
+        ownerEmail: values.ownerEmail,
+        ownerPhoneNumber: values.ownerPhoneNumber,
+        dLFileUrl,
+        applicationIds,
+      })
       return
     }
+
     if (step === 3) {
       const bankLetterFileUrl = await uploadFiles(values.bankFiles, 'application-bank-letter')
-      await saveApplication({ currentStep: 4, bankName: values.bankName, accountNumber: values.accountNumber, routingNumber: values.routingNumber, taxCode: values.taxCode || undefined, averageSale: values.averageSale || undefined, maxSale: values.maxSale || undefined, monthlySale: values.monthlySale || undefined, comment: values.comment || undefined, bankLetterFileUrl, applicationIds })
+      await saveApplication({
+        currentStep: 4,
+        bankName: values.bankName,
+        accountNumber: values.accountNumber,
+        routingNumber: values.routingNumber,
+        taxCode: values.taxCode || undefined,
+        averageSale: values.averageSale || undefined,
+        maxSale: values.maxSale || undefined,
+        monthlySale: values.monthlySale || undefined,
+        comment: values.comment || undefined,
+        bankLetterFileUrl,
+        applicationIds,
+      })
       return
     }
+
     if (step === 4) {
-      await Promise.all(applications.map((application) => saveApplication({ currentStep: 5, plan: plans[application.applicationId], applicationId: application.applicationId })))
-      return
-    }
-    if (step === 5) {
-      await Promise.all(applications.map((application) => {
-        const selection = products[application.applicationId]
-        const hardware = Object.entries(selection.items || {}).filter(([, quantity]) => quantity > 0).map(([itemServiceId, quantity]) => {
-          const item = catalog.products.find((product) => String(product.id) === String(itemServiceId)) || {}
-          return { applicationId: application.applicationId, itemServiceId: item.id, pictureUrl: item.fileUrl || item.pictureUrl, name: item.name, price: item.sellingPrice ?? item.price, quantity, inStock: item.inStock }
+      // Save plan name matching backend agreement rules
+      await Promise.all(
+        applications.map((application) => {
+          const selectedPlan = plans[application.applicationId]
+          return saveApplication({
+            currentStep: 5,
+            plan: selectedPlan,
+            applicationId: application.applicationId,
+          })
         })
-        return saveApplication({ currentStep: 6, hardware, hasOwnHardware: selection.own, applicationId: application.applicationId })
-      }))
+      )
       return
     }
+
+    if (step === 5) {
+      await Promise.all(
+        applications.map((application) => {
+          const selection = products[application.applicationId] || { own: false, items: {} }
+          const hardware = Object.entries(selection.items || {})
+            .filter(([, quantity]) => quantity > 0)
+            .map(([itemServiceId, quantity]) => {
+              const item = catalog.products.find((product) => String(product.id) === String(itemServiceId)) || {}
+              return {
+                applicationId: application.applicationId,
+                itemServiceId: item.id,
+                pictureUrl: item.fileUrl || item.pictureUrl,
+                name: item.name,
+                price: item.sellingPrice ?? item.price,
+                quantity,
+                inStock: item.inStock ?? true,
+              }
+            })
+          return saveApplication({
+            currentStep: 6,
+            hardware,
+            hasOwnHardware: selection.own,
+            applicationId: application.applicationId,
+          })
+        })
+      )
+      return
+    }
+
     if (step === 6) {
-      await Promise.all(applications.map((application) => saveApplication({ currentStep: 7, preferences: preferences[application.applicationId] || {}, applicationId: application.applicationId })))
+      await Promise.all(
+        applications.map((application) =>
+          saveApplication({
+            currentStep: 7,
+            preferences: preferences[application.applicationId] || {},
+            applicationId: application.applicationId,
+          })
+        )
+      )
       return
     }
+
     if (step === 7) {
-      await Promise.all(applications.map((application) => {
-        const form = shipments[application.applicationId]
-        const shipment = { applicationId: application.applicationId, type: form.type }
-        if (form.type === 'Shipping') shipment.shippingDetails = { recipientName: form.recipientName, phoneNumber: form.recipientPhone, email: form.email, address: form.address, floorStreet: form.floorStreet || undefined, zipCode: form.zipCode, country: form.country, state: form.state, companyName: form.companyName || undefined }
-        if (form.type === 'Pickup') { shipment.pickupDetails = { pickupLocationName: form.pickupLocationName, contactName: form.contactName, pickupDate: form.pickupDate }; shipment.specialInstructions = form.specialInstructions || undefined }
-        const payload = { currentStep: 8, paymentMethod: form.type === 'MerchantOwned' ? 'merchantowned' : form.paymentType === 'Lease' ? 'lease' : form.paymentType === 'Pay Later' ? 'pay-later' : 'card', shipment, applicationId: application.applicationId }
-        if (form.paymentType === 'Pay Now' && form.type !== 'MerchantOwned') {
-          shipment.cardDetails = { nameOnCard: form.nameOnCard, expiryDate: form.expiryDate.replace(/\D/g, ''), cardNumber: digits(form.cardNumber, 30), cvv: form.cvv, billingAddress: form.billingAddress }
-          payload.authorizeNetPayment = { card: { cardNumber: digits(form.cardNumber, 30), expirationDate: form.expiryDate.replace(/\D/g, ''), cardCode: form.cvv }, amount: Object.entries(products[application.applicationId]?.items || {}).reduce((total, [id, quantity]) => total + Number(catalog.products.find((item) => String(item.id) === id)?.sellingPrice || catalog.products.find((item) => String(item.id) === id)?.price || 0) * quantity, 0) }
+      await Promise.all(
+        applications.map((application) => {
+          const form = shipments[application.applicationId]
+          const isMerchantOwned = products[application.applicationId]?.own || form.type === 'MerchantOwned'
+          const shipment = {
+            applicationId: application.applicationId,
+            type: isMerchantOwned ? 'MerchantOwned' : form.type,
+          }
+
+          if (form.type === 'Shipping' && !isMerchantOwned) {
+            shipment.shippingDetails = {
+              recipientName: form.recipientName,
+              phoneNumber: form.recipientPhone,
+              email: form.email,
+              address: form.address,
+              floorStreet: form.floorStreet || undefined,
+              zipCode: form.zipCode,
+              country: form.country || 'United States',
+              state: form.state,
+              companyName: form.companyName || undefined,
+            }
+          }
+
+          if (form.type === 'Pickup' && !isMerchantOwned) {
+            shipment.pickupDetails = {
+              pickupLocationName: form.pickupLocationName,
+              contactName: form.contactName,
+              pickupDate: form.pickupDate,
+            }
+            if (form.specialInstructions) shipment.specialInstructions = form.specialInstructions
+          }
+
+          const payload = {
+            currentStep: 8,
+            paymentMethod: isMerchantOwned
+              ? 'merchantowned'
+              : form.paymentType === 'Lease'
+                ? 'lease'
+                : form.paymentType === 'Pay Later'
+                  ? 'pay-later'
+                  : 'card',
+            shipment,
+            applicationId: application.applicationId,
+          }
+
+          if (!isMerchantOwned && form.paymentType === 'Pay Now') {
+            const expiryAuthDate = getAuthorizeExpirationDate(form.expiryDate)
+            const cleanCard = digits(form.cardNumber, 20)
+            const inStockAmount = getInStockTotal(application.applicationId)
+
+            shipment.cardDetails = {
+              nameOnCard: form.nameOnCard,
+              expiryDate: expiryAuthDate,
+              cardNumber: cleanCard,
+              cvv: form.cvv,
+              billingAddress: form.billingAddress,
+            }
+
+            payload.authorizeNetPayment = {
+              card: {
+                cardNumber: cleanCard,
+                expirationDate: expiryAuthDate,
+                cardCode: form.cvv,
+              },
+              amount: inStockAmount,
+            }
+          }
+
+          if (!isMerchantOwned && form.paymentType === 'Pay Later') {
+            payload.payLater = true
+          }
+
+          if (!isMerchantOwned && form.paymentType === 'Lease') {
+            shipment.leaseDetails = {
+              leaseTerm: form.leaseTerm,
+              monthlyPayment: form.monthlyPayment,
+              startDate: form.startDate,
+              billingAddress: form.billingAddress,
+            }
+          }
+
+          return saveApplication(payload)
+        })
+      )
+    }
+  }
+
+  const handleOpenPdfModal = (applicationId, docIndex = 0) => {
+    setActiveAppId(applicationId)
+    setActiveDocIndex(docIndex)
+    setViewingSummary(false)
+    setIsPdfModalOpen(true)
+  }
+
+  const handleSignatureSubmit = async (signatureDataUrl) => {
+    if (!activeAppId) return
+    const docs = agreements[activeAppId] || []
+    const activeDoc = docs[activeDocIndex] || null
+
+    if (!activeDoc?.agreementId) {
+      setError('No active agreement selected.')
+      return
+    }
+
+    setIsSigningDoc(true)
+    setError('')
+
+    try {
+      const signatureFile = dataUrlToFile(signatureDataUrl, 'signature.png')
+      const uploadRes = await uploadApplicationFile(signatureFile, 'application-merchant-signature')
+      const fileRef = extractFileReference(uploadRes)
+
+      if (!fileRef.url) {
+        throw new Error('Failed to upload signature.')
+      }
+
+      setUploadedSignatures((prev) => ({ ...prev, [activeAppId]: fileRef.url }))
+
+      const signRes = await signAgreementDocument(activeAppId, activeDoc.agreementId, fileRef.url)
+      const signedData = unwrapData(signRes)
+
+      // Update the document in state
+      const updatedDocs = docs.map((doc, idx) => {
+        if (idx === activeDocIndex || doc.agreementId === activeDoc.agreementId) {
+          return {
+            ...doc,
+            status: signedData?.status || 'signed',
+            url: signedData?.signedFileUrl?.url || fileRef.url || doc.url,
+            signed: true,
+            signedFileUrl: signedData?.signedFileUrl || { url: fileRef.url },
+          }
         }
-        if (form.paymentType === 'Pay Later') payload.payLater = true
-        if (form.paymentType === 'Lease') shipment.leaseDetails = { leaseTerm: form.leaseTerm, monthlyPayment: form.monthlyPayment, startDate: form.startDate, billingAddress: form.billingAddress }
-        return saveApplication(payload)
-      }))
+        return doc
+      })
+
+      setAgreements((prev) => ({ ...prev, [activeAppId]: updatedDocs }))
+      setShowSignatureModal(false)
+
+      const allSigned = updatedDocs.every((doc) => doc.signed)
+      if (allSigned) {
+        setSignedByApp((prev) => ({ ...prev, [activeAppId]: true }))
+        fetchAgreementSummary(activeAppId).then((url) => {
+          if (url) setSummaryUrlByApp((prev) => ({ ...prev, [activeAppId]: url }))
+        })
+      }
+
+      // Check for remaining unsigned documents in this app
+      const nextUnsignedIdx = updatedDocs.findIndex((d) => !d.signed)
+      if (nextUnsignedIdx >= 0) {
+        setActiveDocIndex(nextUnsignedIdx)
+        setViewingSummary(false)
+        setIsPdfModalOpen(true)
+      } else {
+        // Check for unsigned agreements in subsequent applications
+        const nextApp = applications.find(
+          (app) =>
+            String(app.applicationId) !== String(activeAppId) &&
+            (signMethodByApp[app.applicationId] || 'electronic') === 'electronic' &&
+            !signedByApp[app.applicationId] &&
+            (agreements[app.applicationId] || []).some((d) => !d.signed)
+        )
+        if (nextApp) {
+          const nextDocs = agreements[nextApp.applicationId] || []
+          const nextUnsigned = nextDocs.findIndex((d) => !d.signed)
+          setActiveAppId(nextApp.applicationId)
+          setActiveDocIndex(nextUnsigned >= 0 ? nextUnsigned : 0)
+          setViewingSummary(false)
+          setIsPdfModalOpen(true)
+        } else {
+          setIsPdfModalOpen(true)
+        }
+      }
+    } catch (err) {
+      setError(err.message || 'Failed to submit signature.')
+    } finally {
+      setIsSigningDoc(false)
+    }
+  }
+
+  const submitFinalApplications = async () => {
+    setLoading(true)
+    setError('')
+    try {
+      await Promise.all(
+        applications.map((app) => {
+          const signatureUrl = uploadedSignatures[app.applicationId]
+          return saveApplication({
+            currentStep: 9,
+            agreedTermsAndConditon: true,
+            merchantSignatureFileUrl: signatureUrl ? { url: signatureUrl } : undefined,
+            status: 'pending',
+            applicationId: app.applicationId,
+          })
+        })
+      )
+      onComplete(applications)
+    } catch (err) {
+      setError(err.message || 'Failed to submit application.')
+    } finally {
+      setLoading(false)
     }
   }
 
   const next = async () => {
-    const nextErrors = validate(step, values, solutions, plans, products, shipments, accepted, signature, signatureMethod)
+    const nextErrors = validate(step, values, solutions, plans, products, shipments, checkedByApp, applications)
     setErrors(nextErrors)
     setError('')
+
     if (Object.keys(nextErrors).length) {
+      if (nextErrors.accepted) {
+        setError(nextErrors.accepted)
+      }
       requestAnimationFrame(() => document.querySelector('[aria-invalid="true"], [data-error="true"]')?.focus())
       return
     }
+
     setLoading(true)
     try {
       if (step === 8) {
-        let uploadedSignature
-        if (signatureMethod === 'electronic') {
-          const result = unwrapData(await uploadApplicationFile(dataUrlFile(signature), 'application-merchant-signature'))
-          uploadedSignature = result?.merchantSignatureFileUrl || result?.fileUrl || result?.uploadedFiles || result
-          await Promise.all(applications.flatMap((application) => (agreements[application.applicationId] || []).filter((document) => document.status !== 'signed').map((document) => applicationRequest(`application/${application.applicationId}/agreement-documents/${document.agreementId}/sign`, { method: 'PUT', body: { signatureFileUrl: uploadedSignature } }))))
-        } else {
-          await Promise.all(applications.flatMap((application) => (agreements[application.applicationId] || []).filter((document) => document.status !== 'signed').map((document) => applicationRequest(`application/${application.applicationId}/send-agreement-email`, { method: 'POST', body: { to: values.email || values.ownerEmail, unsignedFileUrl: document.unsignedFileUrl } }))))
+        // Check for email signing apps that haven't sent yet
+        const pendingEmailApps = applications.filter((app) => {
+          const method = signMethodByApp[app.applicationId] || 'electronic'
+          const isSigned = Boolean(signedByApp[app.applicationId])
+          const isEmailed = Boolean(emailSentByApp[app.applicationId])
+          return method === 'email' && !isSigned && !isEmailed
+        })
+
+        if (pendingEmailApps.length > 0) {
+          setSendingEmail(true)
+          const recipientEmail = (values.email || values.ownerEmail || '').trim()
+          if (!recipientEmail) throw new Error('Merchant email is required to email agreements.')
+
+          for (const app of pendingEmailApps) {
+            const docs = agreements[app.applicationId] || []
+            const unsignedDocs = docs.filter((d) => !d.signed)
+            for (const doc of unsignedDocs) {
+              const filePayload = doc.unsignedFileUrl?.url ? {
+                url: doc.unsignedFileUrl.url,
+                originalname: doc.unsignedFileUrl.originalname || `${doc.title}.pdf`,
+                mimetype: doc.unsignedFileUrl.mimetype || 'application/pdf',
+              } : {
+                url: doc.url,
+                originalname: `${doc.title}.pdf`,
+                mimetype: 'application/pdf',
+              }
+              await sendAgreementEmail(app.applicationId, recipientEmail, filePayload)
+            }
+            setEmailSentByApp((prev) => ({ ...prev, [app.applicationId]: recipientEmail }))
+          }
+          setSendingEmail(false)
         }
-        await Promise.all(applications.map((application) => saveApplication({ currentStep: 9, agreedTermsAndConditon: true, merchantSignatureFileUrl: uploadedSignature, status: 'pending', applicationId: application.applicationId })))
-        onComplete(applications)
+
+        // Check if there are electronic applications with unsigned agreements
+        const unsignedElectronicApp = applications.find((app) => {
+          const method = signMethodByApp[app.applicationId] || 'electronic'
+          const isSigned = Boolean(signedByApp[app.applicationId])
+          const docs = agreements[app.applicationId] || []
+          return method === 'electronic' && !isSigned && docs.length > 0
+        })
+
+        if (unsignedElectronicApp) {
+          const docs = agreements[unsignedElectronicApp.applicationId] || []
+          const firstUnsignedIdx = docs.findIndex((d) => !d.signed)
+          setActiveAppId(unsignedElectronicApp.applicationId)
+          setActiveDocIndex(firstUnsignedIdx >= 0 ? firstUnsignedIdx : 0)
+          setViewingSummary(false)
+          setIsPdfModalOpen(true)
+          return
+        }
+
+        await submitFinalApplications()
       } else {
         await saveCurrentStep()
         if (step === 1 && values.ownerSameAsLegal) {
-          setValues((current) => ({ ...current, residentialAddress: current.legalAddress, ownerShipZip: current.legalZipCode, ownerShipCity: current.legalCity, ownerShipState: current.legalState, ownerPhoneNumber: current.contactNumber, ownerEmail: current.email }))
+          setValues((current) => ({
+            ...current,
+            residentialAddress: current.legalAddress,
+            ownerShipZip: current.legalZipCode,
+            ownerShipCity: current.legalCity,
+            ownerShipState: current.legalState,
+            ownerPhoneNumber: current.contactNumber,
+            ownerEmail: current.email,
+          }))
         }
         setStep((current) => current + 1)
         setErrors({})
@@ -405,47 +1335,791 @@ export default function ApplicationFlow({ onComplete }) {
       setError(nextError.message)
     } finally {
       setLoading(false)
+      setSendingEmail(false)
     }
   }
 
-  const back = () => { setErrors({}); setError(''); setStep((current) => Math.max(0, current - 1)); requestAnimationFrame(() => topRef.current?.scrollIntoView({ behavior: 'smooth' })) }
-  const setShipment = (id, key, value) => setShipments((current) => ({ ...current, [id]: { ...current[id], [key]: value } }))
+  const back = () => {
+    setErrors({})
+    setError('')
+    setStep((current) => Math.max(0, current - 1))
+    requestAnimationFrame(() => topRef.current?.scrollIntoView({ behavior: 'smooth' }))
+  }
 
-  const businessFields = (prefix = '') => <div className="grid gap-5 sm:grid-cols-2">
-    <Field id={`${prefix}address`} label="Address" required value={values[`${prefix}Address`]} onChange={(event) => change(`${prefix}Address`, event.target.value)} error={errors[`${prefix}Address`]} />
-    <Field id={`${prefix}zip`} label="ZIP Code" required value={values[`${prefix}ZipCode`]} onChange={(event) => change(`${prefix}ZipCode`, event.target.value)} error={errors[`${prefix}ZipCode`]} />
-    <Field id={`${prefix}city`} label="City" required value={values[`${prefix}City`]} onChange={(event) => change(`${prefix}City`, event.target.value)} error={errors[`${prefix}City`]} />
-    <SelectField id={`${prefix}state`} label="State" required value={values[`${prefix}State`]} onChange={(event) => change(`${prefix}State`, event.target.value)} options={states} error={errors[`${prefix}State`]} />
-  </div>
+  const setShipment = (id, key, value) => setShipments((current) => ({
+    ...current,
+    [id]: { ...current[id], [key]: value },
+  }))
+
+  const businessFields = (prefix = '') => (
+    <div className="grid gap-5 sm:grid-cols-2">
+      <Field
+        id={`${prefix}address`}
+        label="Address"
+        required
+        value={values[`${prefix}Address`]}
+        onChange={(event) => change(`${prefix}Address`, event.target.value)}
+        error={errors[`${prefix}Address`]}
+      />
+      <Field
+        id={`${prefix}zip`}
+        label="ZIP Code"
+        required
+        value={values[`${prefix}ZipCode`]}
+        onChange={(event) => change(`${prefix}ZipCode`, event.target.value)}
+        error={errors[`${prefix}ZipCode`]}
+      />
+      <Field
+        id={`${prefix}city`}
+        label="City"
+        required
+        value={values[`${prefix}City`]}
+        onChange={(event) => change(`${prefix}City`, event.target.value)}
+        error={errors[`${prefix}City`]}
+      />
+      <SelectField
+        id={`${prefix}state`}
+        label="State"
+        required
+        value={values[`${prefix}State`]}
+        onChange={(event) => change(`${prefix}State`, event.target.value)}
+        options={states}
+        error={errors[`${prefix}State`]}
+      />
+    </div>
+  )
+
+  const activeDocs = activeAppId ? agreements[activeAppId] || [] : []
+  const activeIsAllSigned = activeDocs.length > 0 && activeDocs.every((d) => d.signed)
 
   return (
     <div ref={topRef} className="min-w-0 max-w-full scroll-mt-28 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-soft">
-      <div className="border-b border-slate-200 p-4 sm:p-8"><Progress current={step} /></div>
+      <div className="border-b border-slate-200 p-4 sm:p-8">
+        <Progress current={step} />
+      </div>
+
       <div className="min-w-0 p-4 sm:p-8 lg:p-10">
-        {error && <div role="alert" className="mb-6 rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm font-semibold text-rose-700">{error}</div>}
-        {step === 0 && <><StepTitle title="Select your services" description="Choose every service your business needs. A separate linked application will be created for each selection." />{errors.solutions && <p tabIndex="-1" data-error="true" className="mb-4 text-sm font-bold text-rose-600">{errors.solutions}</p>}{loadingData ? <LoaderCircle className="mx-auto my-16 animate-spin text-primary" size={36} /> : <div className="grid gap-4 sm:grid-cols-2">{catalog.services.map((service) => { const selected = solutions.includes(service.solution); const ServiceIcon = solutionIcons[service.solution] || WalletCards; return <button type="button" key={service.id} onClick={() => setSolutions((current) => selected ? current.filter((item) => item !== service.solution) : [...current, service.solution])} className={`group flex items-center gap-4 rounded-2xl border p-5 text-left transition ${selected ? 'border-primary bg-mist shadow-md' : 'border-slate-200 hover:border-primary/50 hover:shadow-sm'}`}><span className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl transition ${selected ? 'bg-primary text-white' : 'bg-mist text-primary group-hover:bg-primary group-hover:text-white'}`}><ServiceIcon size={27} strokeWidth={1.8} /></span><span className="min-w-0 flex-1"><strong className="block text-navy">{service.title}</strong><span className="mt-1 block text-sm capitalize text-slate-500">{String(service.solution).replaceAll('-', ' ')}</span></span><span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full border ${selected ? 'border-primary bg-primary text-white' : 'border-slate-300'}`}>{selected && <Check size={16} />}</span></button>})}</div>}</>}
+        {error && (
+          <div role="alert" className="mb-6 rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm font-semibold text-rose-700">
+            {error}
+          </div>
+        )}
 
-        {step === 1 && <><StepTitle title="Business information" description="Tell us about the legal entity and the business location where you operate." /><h3 className="mb-4 text-lg font-extrabold text-navy">Legal information</h3><div className="grid gap-5 sm:grid-cols-2"><Field id="legalName" label="Legal Business Name" required value={values.legalName} onChange={(event) => change('legalName', event.target.value)} error={errors.legalName} /><Field id="contactNumber" label="Legal Phone Number" required value={values.contactNumber} onChange={(event) => change('contactNumber', phone(event.target.value))} error={errors.contactNumber} /></div><div className="mt-5">{businessFields('legal')}</div>{solutions.includes('ebt') && <div className="mt-5"><Field id="ebtFnsNumber" label="EBT FNS Number" required value={values.ebtFnsNumber} onChange={(event) => change('ebtFnsNumber', event.target.value)} error={errors.ebtFnsNumber} /></div>}<label className="mt-6 flex items-center gap-3 font-semibold text-slate-700"><input type="checkbox" checked={values.sameAsLegal} onChange={(event) => change('sameAsLegal', event.target.checked)} className="h-5 w-5 accent-primary" />Business information is the same as legal information</label>{!values.sameAsLegal && <div className="mt-7 border-t border-slate-200 pt-7"><h3 className="mb-4 text-lg font-extrabold text-navy">DBA information</h3><div className="grid gap-5 sm:grid-cols-2"><Field id="businessName" label="Business Name (DBA)" required value={values.businessName} onChange={(event) => change('businessName', event.target.value)} error={errors.businessName} /><Field id="dbaPhoneNumber" label="DBA Phone Number" required value={values.dbaPhoneNumber} onChange={(event) => change('dbaPhoneNumber', phone(event.target.value))} error={errors.dbaPhoneNumber} /></div><div className="mt-5">{businessFields('dba')}</div></div>}<div className="mt-7 grid gap-5 border-t border-slate-200 pt-7 sm:grid-cols-2"><SelectField id="taxType" label="Type of Tax ID" required value={values.taxType} onChange={(event) => change('taxType', event.target.value)} options={['SSN', 'EIN', 'ITIN']} error={errors.taxType} /><Field id="feinNumber" label="Tax ID" required value={values.feinNumber} onChange={(event) => change('feinNumber', event.target.value)} error={errors.feinNumber} /><SelectField id="ownerShipType" label="Ownership Type" required value={values.ownerShipType} onChange={(event) => change('ownerShipType', event.target.value)} options={['Corporation', 'LLC', 'Sole Proprietorship', 'Others']} error={errors.ownerShipType} /><Field id="businessStartDate" label="Business Start Date" type="date" value={values.businessStartDate} onChange={(event) => change('businessStartDate', event.target.value)} /><SelectField id="businessType" label="Business Type" required value={values.businessType} onChange={(event) => change('businessType', event.target.value)} options={['Retail', 'Restaurant', 'E-Commerce/Online', 'Service']} error={errors.businessType} /><Field id="email" label="DBA Email" required type="email" value={values.email} onChange={(event) => change('email', event.target.value)} error={errors.email} /><Field id="website" label="Website" type="url" value={values.website} onChange={(event) => change('website', event.target.value)} /><Field id="productsDescription" label="Description of Products or Services Sold" required placeholder="e.g. Clothing, restaurant meals, or consulting services" value={values.productsDescription} onChange={(event) => change('productsDescription', event.target.value)} error={errors.productsDescription} /></div></>}
+        {/* Step 0: Services */}
+        {step === 0 && (
+          <>
+            <StepTitle title="Select your services" description="Choose every service your business needs. A separate linked application will be created for each selection." />
+            {errors.solutions && <p tabIndex="-1" data-error="true" className="mb-4 text-sm font-bold text-rose-600">{errors.solutions}</p>}
+            {loadingData ? (
+              <LoaderCircle className="mx-auto my-16 animate-spin text-primary" size={36} />
+            ) : (
+              <div className="grid gap-4 sm:grid-cols-2">
+                {catalog.services.map((service) => {
+                  const selected = solutions.includes(service.solution)
+                  const ServiceIcon = solutionIcons[service.solution] || WalletCards
+                  return (
+                    <button
+                      type="button"
+                      key={service.id}
+                      onClick={() => setSolutions((current) => selected ? current.filter((item) => item !== service.solution) : [...current, service.solution])}
+                      className={`group flex items-center gap-4 rounded-2xl border p-5 text-left transition ${selected ? 'border-primary bg-mist shadow-md' : 'border-slate-200 hover:border-primary/50 hover:shadow-sm'}`}
+                    >
+                      <span className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl transition ${selected ? 'bg-primary text-white' : 'bg-mist text-primary group-hover:bg-primary group-hover:text-white'}`}>
+                        <ServiceIcon size={27} strokeWidth={1.8} />
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <strong className="block text-navy">{service.title}</strong>
+                        <span className="mt-1 block text-sm capitalize text-slate-500">{String(service.solution).replaceAll('-', ' ')}</span>
+                      </span>
+                      <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full border ${selected ? 'border-primary bg-primary text-white' : 'border-slate-300'}`}>
+                        {selected && <Check size={16} />}
+                      </span>
+                    </button>
+                  )
+                })}
+              </div>
+            )}
+          </>
+        )}
 
-        {step === 2 && <><StepTitle title="Ownership information" description="Provide details for the primary owner or authorized principal." /><div className="grid gap-5 sm:grid-cols-2"><Field id="ownerFirstName" label="Owner First Name" required value={values.ownerFirstName} onChange={(event) => change('ownerFirstName', event.target.value)} error={errors.ownerFirstName} /><Field id="ownerLastName" label="Owner Last Name" required value={values.ownerLastName} onChange={(event) => change('ownerLastName', event.target.value)} error={errors.ownerLastName} /><Field id="date" label="Date of Birth" required type="date" value={values.date} onChange={(event) => change('date', event.target.value)} error={errors.date} /><Field id="socialSecurityNumber" label="Social Security Number" required type="password" inputMode="numeric" value={values.socialSecurityNumber} onChange={(event) => change('socialSecurityNumber', digits(event.target.value, 9))} error={errors.socialSecurityNumber} /></div><label className="mt-6 flex items-center gap-3 font-semibold text-slate-700"><input type="checkbox" checked={values.ownerSameAsLegal} onChange={(event) => { const checked = event.target.checked; change('ownerSameAsLegal', checked); if (checked) setValues((current) => ({ ...current, residentialAddress: current.legalAddress, ownerShipZip: current.legalZipCode, ownerShipCity: current.legalCity, ownerShipState: current.legalState, ownerPhoneNumber: current.contactNumber, ownerEmail: current.email })) }} className="h-5 w-5 accent-primary" />Owner information is the same as legal information</label><div className="mt-6 grid gap-5 sm:grid-cols-2"><Field id="residentialAddress" label="Residential Address" required value={values.residentialAddress} onChange={(event) => change('residentialAddress', event.target.value)} error={errors.residentialAddress} /><Field id="ownerShipZip" label="ZIP Code" required value={values.ownerShipZip} onChange={(event) => change('ownerShipZip', event.target.value)} error={errors.ownerShipZip} /><Field id="ownerShipCity" label="City" required value={values.ownerShipCity} onChange={(event) => change('ownerShipCity', event.target.value)} error={errors.ownerShipCity} /><SelectField id="ownerShipState" label="State" required value={values.ownerShipState} onChange={(event) => change('ownerShipState', event.target.value)} options={states} error={errors.ownerShipState} /><Field id="ownerPhoneNumber" label="Phone Number" required value={values.ownerPhoneNumber} onChange={(event) => change('ownerPhoneNumber', phone(event.target.value))} error={errors.ownerPhoneNumber} /><Field id="ownerEmail" label="Owner Email" required type="email" value={values.ownerEmail} onChange={(event) => change('ownerEmail', event.target.value)} error={errors.ownerEmail} /><Field id="dLFiles" label="Driver License or Government ID" required error={errors.dLFiles}><input id="dLFiles" type="file" multiple onChange={(event) => change('dLFiles', [...event.target.files])} className={`${formControlClasses} file:mr-4 file:rounded-lg file:border-0 file:bg-mist file:px-3 file:py-2 file:font-bold file:text-primary`} /></Field></div></>}
+        {/* Step 1: Business */}
+        {step === 1 && (
+          <>
+            <StepTitle title="Business information" description="Tell us about the legal entity and the business location where you operate." />
+            <h3 className="mb-4 text-lg font-extrabold text-navy">Legal information</h3>
+            <div className="grid gap-5 sm:grid-cols-2">
+              <Field id="legalName" label="Legal Business Name" required value={values.legalName} onChange={(event) => change('legalName', event.target.value)} error={errors.legalName} />
+              <Field id="contactNumber" label="Legal Phone Number" required value={values.contactNumber} onChange={(event) => change('contactNumber', phone(event.target.value))} error={errors.contactNumber} />
+            </div>
+            <div className="mt-5">{businessFields('legal')}</div>
+            {solutions.includes('ebt') && (
+              <div className="mt-5">
+                <Field id="ebtFnsNumber" label="EBT FNS Number" required value={values.ebtFnsNumber} onChange={(event) => change('ebtFnsNumber', event.target.value)} error={errors.ebtFnsNumber} />
+              </div>
+            )}
+            <label className="mt-6 flex items-center gap-3 font-semibold text-slate-700">
+              <input type="checkbox" checked={values.sameAsLegal} onChange={(event) => change('sameAsLegal', event.target.checked)} className="h-5 w-5 accent-primary" />
+              Business information is the same as legal information
+            </label>
+            {!values.sameAsLegal && (
+              <div className="mt-7 border-t border-slate-200 pt-7">
+                <h3 className="mb-4 text-lg font-extrabold text-navy">DBA information</h3>
+                <div className="grid gap-5 sm:grid-cols-2">
+                  <Field id="businessName" label="Business Name (DBA)" required value={values.businessName} onChange={(event) => change('businessName', event.target.value)} error={errors.businessName} />
+                  <Field id="dbaPhoneNumber" label="DBA Phone Number" required value={values.dbaPhoneNumber} onChange={(event) => change('dbaPhoneNumber', phone(event.target.value))} error={errors.dbaPhoneNumber} />
+                </div>
+                <div className="mt-5">{businessFields('dba')}</div>
+              </div>
+            )}
+            <div className="mt-7 grid gap-5 border-t border-slate-200 pt-7 sm:grid-cols-2">
+              <SelectField id="taxType" label="Type of Tax ID" required value={values.taxType} onChange={(event) => change('taxType', event.target.value)} options={['FEIN', 'SSN']} error={errors.taxType} />
+              <Field id="feinNumber" label="FEIN / Tax ID Number" required value={values.feinNumber} onChange={(event) => change('feinNumber', digits(event.target.value, 9))} error={errors.feinNumber} />
+              <SelectField id="ownerShipType" label="Ownership Type" required value={values.ownerShipType} onChange={(event) => change('ownerShipType', event.target.value)} options={['Sole Proprietorship', 'Partnership', 'Corporation', 'LLC', 'Non-Profit']} error={errors.ownerShipType} />
+              <Field id="businessStartDate" label="Business Start Date" type="date" value={values.businessStartDate} onChange={(event) => change('businessStartDate', event.target.value)} />
+              <SelectField id="businessType" label="Business Type" required value={values.businessType} onChange={(event) => change('businessType', event.target.value)} options={['Retail', 'Restaurant', 'Service', 'E-Commerce', 'Wholesale', 'Other']} error={errors.businessType} />
+              <Field id="email" label="Business Email" required type="email" value={values.email} onChange={(event) => change('email', event.target.value)} error={errors.email} />
+              <Field id="website" label="Website URL" type="url" value={values.website} onChange={(event) => change('website', event.target.value)} />
+              <Field id="productsDescription" label="Products / Services Description" required value={values.productsDescription} onChange={(event) => change('productsDescription', event.target.value)} error={errors.productsDescription} />
+            </div>
+          </>
+        )}
 
-        {step === 3 && <><StepTitle title="Financial information" description="Enter the settlement account and expected processing figures." /><div className="grid gap-5 sm:grid-cols-2"><Field id="bankName" label="Bank Name" value={values.bankName} onChange={(event) => change('bankName', event.target.value)} /><Field id="accountNumber" label="Account Number" required type="password" value={values.accountNumber} onChange={(event) => change('accountNumber', event.target.value)} error={errors.accountNumber} /><Field id="routingNumber" label="Routing Number" required type="password" inputMode="numeric" value={values.routingNumber} onChange={(event) => change('routingNumber', digits(event.target.value, 9))} error={errors.routingNumber} /><Field id="taxCode" label="Tax Exempt Code" type="password" value={values.taxCode} onChange={(event) => change('taxCode', event.target.value)} /><Field id="bankFiles" label="Void Check or Bank Letter" required error={errors.bankFiles}><input id="bankFiles" type="file" multiple onChange={(event) => change('bankFiles', [...event.target.files])} className={`${formControlClasses} file:mr-4 file:rounded-lg file:border-0 file:bg-mist file:px-3 file:py-2 file:font-bold file:text-primary`} /></Field>{solutions.some((solution) => saleSolutions.has(solution)) && <><Field id="averageSale" label="Average Sale" required type="number" min="0" step="0.01" value={values.averageSale} onChange={(event) => change('averageSale', event.target.value)} error={errors.averageSale} /><Field id="maxSale" label="Maximum Sale" required type="number" min="0" step="0.01" value={values.maxSale} onChange={(event) => change('maxSale', event.target.value)} error={errors.maxSale} /><Field id="monthlySale" label="Monthly Sale" required type="number" min="0" step="0.01" value={values.monthlySale} onChange={(event) => change('monthlySale', event.target.value)} error={errors.monthlySale} /></>}<Field id="comment" label="Comments" value={values.comment} onChange={(event) => change('comment', event.target.value)} /></div></>}
+        {/* Step 2: Ownership */}
+        {step === 2 && (
+          <>
+            <StepTitle title="Ownership information" description="Provide details for the primary owner or authorized principal." />
+            <div className="grid gap-5 sm:grid-cols-2">
+              <Field id="ownerFirstName" label="Owner First Name" required value={values.ownerFirstName} onChange={(event) => change('ownerFirstName', event.target.value)} error={errors.ownerFirstName} />
+              <Field id="ownerLastName" label="Owner Last Name" required value={values.ownerLastName} onChange={(event) => change('ownerLastName', event.target.value)} error={errors.ownerLastName} />
+              <Field id="date" label="Date of Birth" required type="date" value={values.date} onChange={(event) => change('date', event.target.value)} error={errors.date} />
+              <Field id="socialSecurityNumber" label="Social Security Number" required type="password" inputMode="numeric" value={values.socialSecurityNumber} onChange={(event) => change('socialSecurityNumber', digits(event.target.value, 9))} error={errors.socialSecurityNumber} />
+            </div>
+            <label className="mt-6 flex items-center gap-3 font-semibold text-slate-700">
+              <input
+                type="checkbox"
+                checked={values.ownerSameAsLegal}
+                onChange={(event) => {
+                  const checked = event.target.checked
+                  change('ownerSameAsLegal', checked)
+                  if (checked) {
+                    setValues((current) => ({
+                      ...current,
+                      residentialAddress: current.legalAddress,
+                      ownerShipZip: current.legalZipCode,
+                      ownerShipCity: current.legalCity,
+                      ownerShipState: current.legalState,
+                      ownerPhoneNumber: current.contactNumber,
+                      ownerEmail: current.email,
+                    }))
+                  }
+                }}
+                className="h-5 w-5 accent-primary"
+              />
+              Owner information is the same as legal information
+            </label>
+            <div className="mt-6 grid gap-5 sm:grid-cols-2">
+              <Field id="residentialAddress" label="Residential Address" required value={values.residentialAddress} onChange={(event) => change('residentialAddress', event.target.value)} error={errors.residentialAddress} />
+              <Field id="ownerShipZip" label="ZIP Code" required value={values.ownerShipZip} onChange={(event) => change('ownerShipZip', event.target.value)} error={errors.ownerShipZip} />
+              <Field id="ownerShipCity" label="City" required value={values.ownerShipCity} onChange={(event) => change('ownerShipCity', event.target.value)} error={errors.ownerShipCity} />
+              <SelectField id="ownerShipState" label="State" required value={values.ownerShipState} onChange={(event) => change('ownerShipState', event.target.value)} options={states} error={errors.ownerShipState} />
+              <Field id="ownerPhoneNumber" label="Owner Phone Number" required value={values.ownerPhoneNumber} onChange={(event) => change('ownerPhoneNumber', phone(event.target.value))} error={errors.ownerPhoneNumber} />
+              <Field id="ownerEmail" label="Owner Email" required type="email" value={values.ownerEmail} onChange={(event) => change('ownerEmail', event.target.value)} error={errors.ownerEmail} />
+            </div>
+            <div className="mt-6">
+              <Field id="dLFiles" label="Driver License or Government ID (Upload)" required error={errors.dLFiles}>
+                <input
+                  id="dLFiles"
+                  type="file"
+                  multiple
+                  onChange={(event) => change('dLFiles', [...event.target.files])}
+                  className={`${formControlClasses} file:mr-4 file:rounded-lg file:border-0 file:bg-mist file:px-3 file:py-2 file:font-bold file:text-primary`}
+                />
+              </Field>
+            </div>
+          </>
+        )}
 
-        {step === 4 && <><StepTitle title="Select a plan" description="Choose one available pricing plan for each requested service." />{errors.plan && <p tabIndex="-1" data-error="true" className="mb-4 font-bold text-rose-600">{errors.plan}</p>}<div className="space-y-8">{applications.map((application) => { const available = catalog.plans.filter((plan) => String(plan.service).toLowerCase() === application.solution.toLowerCase()); return <section key={application.applicationId}><h3 className="mb-3 text-lg font-extrabold capitalize text-navy">{application.solution.replaceAll('-', ' ')}</h3><div className="grid gap-4 sm:grid-cols-2">{available.map((plan) => <button type="button" key={plan.id} onClick={() => setPlans((current) => ({ ...current, [application.applicationId]: plan.id }))} className={`rounded-2xl border p-5 text-left ${plans[application.applicationId] === plan.id ? 'border-primary bg-mist' : 'border-slate-200 hover:border-primary/50'}`}><strong className="text-navy">{plan.name}</strong><p className="mt-2 text-sm leading-6">{plan.description}</p></button>)}{!available.length && <p className="rounded-xl bg-mist p-4 text-sm font-semibold text-primary-dark">No plans are currently available for this service.</p>}</div></section>})}</div></>}
+        {/* Step 3: Financial */}
+        {step === 3 && (
+          <>
+            <StepTitle title="Financial information" description="Enter the settlement account and expected processing figures." />
+            <div className="grid gap-5 sm:grid-cols-2">
+              <Field id="bankName" label="Bank Name" value={values.bankName} onChange={(event) => change('bankName', event.target.value)} />
+              <Field id="accountNumber" label="Account Number" required type="password" value={values.accountNumber} onChange={(event) => change('accountNumber', event.target.value)} error={errors.accountNumber} />
+              <Field id="routingNumber" label="Routing Number" required type="password" inputMode="numeric" value={values.routingNumber} onChange={(event) => change('routingNumber', digits(event.target.value, 9))} error={errors.routingNumber} />
+              <Field id="taxCode" label="Tax Exempt Code" type="password" value={values.taxCode} onChange={(event) => change('taxCode', event.target.value)} />
+              <Field id="bankFiles" label="Void Check or Bank Letter" required error={errors.bankFiles}>
+                <input
+                  id="bankFiles"
+                  type="file"
+                  multiple
+                  onChange={(event) => change('bankFiles', [...event.target.files])}
+                  className={`${formControlClasses} file:mr-4 file:rounded-lg file:border-0 file:bg-mist file:px-3 file:py-2 file:font-bold file:text-primary`}
+                />
+              </Field>
+              {solutions.some((solution) => saleSolutions.has(solution)) && (
+                <>
+                  <Field id="averageSale" label="Average Sale ($)" required type="number" min="0" step="0.01" value={values.averageSale} onChange={(event) => change('averageSale', event.target.value)} error={errors.averageSale} />
+                  <Field id="maxSale" label="Maximum Sale ($)" required type="number" min="0" step="0.01" value={values.maxSale} onChange={(event) => change('maxSale', event.target.value)} error={errors.maxSale} />
+                  <Field id="monthlySale" label="Estimated Monthly Volume ($)" required type="number" min="0" step="0.01" value={values.monthlySale} onChange={(event) => change('monthlySale', event.target.value)} error={errors.monthlySale} />
+                </>
+              )}
+              <Field id="comment" label="Comments / Notes" value={values.comment} onChange={(event) => change('comment', event.target.value)} />
+            </div>
+          </>
+        )}
 
-        {step === 5 && <><StepTitle title="Hardware and equipment" description="Select the products you need, or tell us you already have compatible hardware." />{errors.products && <p tabIndex="-1" data-error="true" className="mb-4 font-bold text-rose-600">{errors.products}</p>}<div className="space-y-9">{applications.map((application) => { const selection = products[application.applicationId] || { own: false, items: {} }; const available = catalog.products.filter((product) => product.category?.solution === application.solution); return <section key={application.applicationId}><div className="mb-4 flex flex-wrap items-center justify-between gap-3"><h3 className="text-lg font-extrabold capitalize text-navy">{application.solution.replaceAll('-', ' ')}</h3><label className="flex items-center gap-2 text-sm font-bold"><input type="checkbox" checked={selection.own} onChange={(event) => setProducts((current) => ({ ...current, [application.applicationId]: { own: event.target.checked, items: event.target.checked ? {} : selection.items } }))} className="h-5 w-5 accent-primary" />I already have hardware</label></div>{!selection.own && <div className="grid gap-4 sm:grid-cols-2">{available.map((product) => { const quantity = selection.items[product.id] || 0; return <div key={product.id} className={`rounded-2xl border p-5 ${quantity ? 'border-primary bg-mist' : 'border-slate-200'}`}><div className="flex justify-between gap-4"><div><strong className="text-navy">{product.name}</strong><p className="mt-1 font-bold text-primary">${Number(product.sellingPrice ?? product.price ?? 0).toFixed(2)}</p></div><span className="text-xs font-bold text-slate-500">{product.inStock ? 'In stock' : 'Special order'}</span></div><div className="mt-4 flex items-center gap-3"><button type="button" className="h-9 w-9 rounded-lg border bg-white font-bold" onClick={() => setProducts((current) => ({ ...current, [application.applicationId]: { ...selection, items: { ...selection.items, [product.id]: Math.max(0, quantity - 1) } } }))}>-</button><span className="min-w-6 text-center font-bold">{quantity}</span><button type="button" className="h-9 w-9 rounded-lg bg-primary font-bold text-white" onClick={() => setProducts((current) => ({ ...current, [application.applicationId]: { ...selection, items: { ...selection.items, [product.id]: quantity + 1 } } }))}>+</button></div></div>})}{!available.length && <p className="rounded-xl bg-slate-50 p-4">No hardware is listed for this service.</p>}</div>}</section>})}</div></>}
+        {/* Step 4: Plan */}
+        {step === 4 && (
+          <>
+            <StepTitle title="Select a plan" description="Choose one available pricing plan for each requested service." />
+            {errors.plan && <p tabIndex="-1" data-error="true" className="mb-4 font-bold text-rose-600">{errors.plan}</p>}
+            <div className="space-y-8">
+              {applications.map((application) => {
+                const available = catalog.plans.filter(
+                  (plan) => String(plan.service).toLowerCase() === application.solution.toLowerCase()
+                )
+                const currentPlan = plans[application.applicationId]
+                return (
+                  <section key={application.applicationId} className="rounded-2xl border border-slate-200 p-5 sm:p-6">
+                    <h3 className="mb-4 text-lg font-extrabold capitalize text-navy">
+                      {getServiceLabel(application.solution)}
+                    </h3>
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      {available.map((plan) => {
+                        const isSelected = currentPlan === plan.name
+                        return (
+                          <button
+                            type="button"
+                            key={plan.id}
+                            onClick={() => setPlans((current) => ({ ...current, [application.applicationId]: plan.name }))}
+                            className={`flex flex-col justify-between rounded-2xl border p-5 text-left transition ${isSelected ? 'border-primary bg-mist shadow-sm' : 'border-slate-200 hover:border-primary/50'}`}
+                          >
+                            <div className="flex items-start justify-between gap-3">
+                              <strong className="text-navy">{plan.name}</strong>
+                              <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full border ${isSelected ? 'border-primary bg-primary text-white' : 'border-slate-300'}`}>
+                                {isSelected && <Check size={14} />}
+                              </span>
+                            </div>
+                            <p className="mt-2 text-sm leading-6 text-slate-600">{plan.description}</p>
+                          </button>
+                        )
+                      })}
+                      {!available.length && (
+                        <p className="col-span-full rounded-xl bg-mist p-4 text-sm font-semibold text-primary-dark">
+                          No plans are currently configured for this service. Standard rates apply.
+                        </p>
+                      )}
+                    </div>
+                  </section>
+                )
+              })}
+            </div>
+          </>
+        )}
 
-        {step === 6 && <><StepTitle title="Application preferences" description="Configure the service-specific preferences supplied by our application system." /><div className="space-y-9">{applications.map((application) => { const definitions = catalog.preferences.filter((item) => item.formName === preferenceForms[application.solution]).sort((a, b) => Number(a.order || 0) - Number(b.order || 0)); const appValues = preferences[application.applicationId] || {}; return <section key={application.applicationId}><h3 className="mb-4 text-lg font-extrabold capitalize text-navy">{application.solution.replaceAll('-', ' ')}</h3><div className="grid gap-5 sm:grid-cols-2">{definitions.map((definition) => { const setValue = (value) => setPreferences((current) => ({ ...current, [application.applicationId]: { ...appValues, [definition.name]: value } })); if (definition.preference === 'switch') return <label key={definition.name} className="flex items-center gap-3 rounded-xl border border-slate-200 p-4 font-bold text-navy"><input type="checkbox" checked={Boolean(appValues[definition.name])} onChange={(event) => setValue(event.target.checked)} className="h-5 w-5 accent-primary" />{definition.name}</label>; if (definition.preference === 'dropdown') return <SelectField key={definition.name} id={`pref-${application.applicationId}-${definition.order}`} label={definition.name} value={appValues[definition.name] || ''} onChange={(event) => setValue(event.target.value)} options={(definition.extra || []).map((item) => typeof item === 'string' ? item : { value: item.value || item.title || item.name, label: item.title || item.name || item.value })} />; return <Field key={definition.name} id={`pref-${application.applicationId}-${definition.order}`} label={definition.name} type={definition.preference === 'datePicker' ? 'date' : definition.preference === 'timePicker' ? 'time' : 'text'} value={appValues[definition.name] || ''} onChange={(event) => setValue(event.target.value)} />})}{!definitions.length && <p className="text-sm text-slate-500">No additional preferences are required.</p>}</div></section>})}</div></>}
+        {/* Step 5: Hardware */}
+        {step === 5 && (
+          <>
+            <StepTitle title="Hardware and equipment" description="Select the products you need, or tell us you already have compatible hardware." />
+            {errors.products && <p tabIndex="-1" data-error="true" className="mb-4 font-bold text-rose-600">{errors.products}</p>}
+            <div className="space-y-9">
+              {applications.map((application) => {
+                const selection = products[application.applicationId] || { own: false, items: {} }
+                const available = catalog.products.filter((product) => product.category?.solution === application.solution)
+                return (
+                  <section key={application.applicationId} className="rounded-2xl border border-slate-200 p-5 sm:p-6">
+                    <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                      <h3 className="text-lg font-extrabold capitalize text-navy">{getServiceLabel(application.solution)}</h3>
+                      <label className="flex items-center gap-2 text-sm font-bold text-slate-700">
+                        <input
+                          type="checkbox"
+                          checked={selection.own}
+                          onChange={(event) => setProducts((current) => ({
+                            ...current,
+                            [application.applicationId]: { own: event.target.checked, items: event.target.checked ? {} : selection.items },
+                          }))}
+                          className="h-5 w-5 accent-primary"
+                        />
+                        I already have hardware
+                      </label>
+                    </div>
 
-        {step === 7 && <><StepTitle title="Delivery and payment" description="Choose how each equipment order should be fulfilled and paid." /><div className="space-y-10">{applications.map((application) => { const form = shipments[application.applicationId]; if (!form) return null; const ownHardware = products[application.applicationId]?.own; return <section key={application.applicationId} className="rounded-2xl border border-slate-200 p-5 sm:p-6"><h3 className="text-lg font-extrabold capitalize text-navy">{application.solution.replaceAll('-', ' ')}</h3>{errors[`shipment-${application.applicationId}`] && <p className="mt-3 font-bold text-rose-600">{errors[`shipment-${application.applicationId}`]}</p>}{errors[`payment-${application.applicationId}`] && <p className="mt-3 font-bold text-rose-600">{errors[`payment-${application.applicationId}`]}</p>}<div className="mt-5 grid gap-3 sm:grid-cols-3">{(ownHardware ? ['MerchantOwned'] : ['Shipping', 'Pickup', 'MerchantOwned']).map((type) => <button key={type} type="button" onClick={() => setShipment(application.applicationId, 'type', type)} className={`rounded-xl border px-4 py-3 font-bold ${form.type === type ? 'border-primary bg-mist text-primary' : 'border-slate-200'}`}>{type === 'MerchantOwned' ? 'Merchant-Owned' : type}</button>)}</div>{form.type === 'Shipping' && <div className="mt-6 grid gap-5 sm:grid-cols-2"><Field id={`recipient-${application.applicationId}`} label="Recipient Name" required value={form.recipientName} onChange={(event) => setShipment(application.applicationId, 'recipientName', event.target.value)} /><Field id={`company-${application.applicationId}`} label="Company Name" value={form.companyName} onChange={(event) => setShipment(application.applicationId, 'companyName', event.target.value)} /><Field id={`recipient-phone-${application.applicationId}`} label="Phone Number" required value={form.recipientPhone} onChange={(event) => setShipment(application.applicationId, 'recipientPhone', phone(event.target.value))} /><Field id={`shipping-email-${application.applicationId}`} label="Email" required type="email" value={form.email} onChange={(event) => setShipment(application.applicationId, 'email', event.target.value)} /><Field id={`shipping-address-${application.applicationId}`} label="Shipping Address" required value={form.address} onChange={(event) => setShipment(application.applicationId, 'address', event.target.value)} /><Field id={`floor-${application.applicationId}`} label="Floor / Street" value={form.floorStreet} onChange={(event) => setShipment(application.applicationId, 'floorStreet', event.target.value)} /><Field id={`shipping-zip-${application.applicationId}`} label="ZIP Code" required value={form.zipCode} onChange={(event) => setShipment(application.applicationId, 'zipCode', event.target.value)} /><Field id={`country-${application.applicationId}`} label="Country" required value={form.country} onChange={(event) => setShipment(application.applicationId, 'country', event.target.value)} /><SelectField id={`shipping-state-${application.applicationId}`} label="State" required value={form.state} onChange={(event) => setShipment(application.applicationId, 'state', event.target.value)} options={states} /></div>}{form.type === 'Pickup' && <div className="mt-6 grid gap-5 sm:grid-cols-2"><Field id={`pickup-${application.applicationId}`} label="Pickup Location" required value={form.pickupLocationName} onChange={(event) => setShipment(application.applicationId, 'pickupLocationName', event.target.value)} /><Field id={`contact-${application.applicationId}`} label="Contact Name" required value={form.contactName} onChange={(event) => setShipment(application.applicationId, 'contactName', event.target.value)} /><Field id={`pickup-date-${application.applicationId}`} label="Pickup Date" required type="date" min={new Date().toISOString().slice(0, 10)} value={form.pickupDate} onChange={(event) => setShipment(application.applicationId, 'pickupDate', event.target.value)} /><Field id={`instructions-${application.applicationId}`} label="Special Instructions" value={form.specialInstructions} onChange={(event) => setShipment(application.applicationId, 'specialInstructions', event.target.value)} /></div>}{form.type !== 'MerchantOwned' && <><div className="mt-7 grid gap-3 sm:grid-cols-3">{['Pay Now', 'Lease', 'Pay Later'].map((type) => <button key={type} type="button" onClick={() => setShipment(application.applicationId, 'paymentType', type)} className={`rounded-xl border px-4 py-3 font-bold ${form.paymentType === type ? 'border-primary bg-mist text-primary' : 'border-slate-200'}`}>{type}</button>)}</div>{form.paymentType === 'Pay Now' && <div className="mt-6 grid gap-5 sm:grid-cols-2"><Field id={`card-name-${application.applicationId}`} label="Name on Card" required value={form.nameOnCard} onChange={(event) => setShipment(application.applicationId, 'nameOnCard', event.target.value)} /><Field id={`card-number-${application.applicationId}`} label="Card Number" required inputMode="numeric" value={form.cardNumber} onChange={(event) => setShipment(application.applicationId, 'cardNumber', digits(event.target.value, 19))} /><Field id={`expiry-${application.applicationId}`} label="Expiry Date (MM/YYYY)" required placeholder="MM/YYYY" value={form.expiryDate} onChange={(event) => setShipment(application.applicationId, 'expiryDate', event.target.value)} /><Field id={`cvv-${application.applicationId}`} label="CVV" required type="password" value={form.cvv} onChange={(event) => setShipment(application.applicationId, 'cvv', digits(event.target.value, 4))} /><Field id={`billing-${application.applicationId}`} label="Billing Address" required value={form.billingAddress} onChange={(event) => setShipment(application.applicationId, 'billingAddress', event.target.value)} /></div>}{form.paymentType === 'Lease' && <div className="mt-6 grid gap-5 sm:grid-cols-2"><Field id={`lease-term-${application.applicationId}`} label="Lease Term" required value={form.leaseTerm} onChange={(event) => setShipment(application.applicationId, 'leaseTerm', event.target.value)} /><Field id={`monthly-${application.applicationId}`} label="Monthly Payment" required type="number" min="0" step="0.01" value={form.monthlyPayment} onChange={(event) => setShipment(application.applicationId, 'monthlyPayment', event.target.value)} /><Field id={`start-${application.applicationId}`} label="Start Date" required type="date" value={form.startDate} onChange={(event) => setShipment(application.applicationId, 'startDate', event.target.value)} /><Field id={`lease-billing-${application.applicationId}`} label="Billing Address" required value={form.billingAddress} onChange={(event) => setShipment(application.applicationId, 'billingAddress', event.target.value)} /></div>}</>}</section>})}</div></>}
+                    {!selection.own && (
+                      <div className="grid gap-4 sm:grid-cols-2">
+                        {available.map((product) => {
+                          const quantity = selection.items[product.id] || 0
+                          const price = Number(product.sellingPrice ?? product.price ?? 0)
+                          return (
+                            <div key={product.id} className={`rounded-2xl border p-5 transition ${quantity ? 'border-primary bg-mist shadow-sm' : 'border-slate-200'}`}>
+                              <div className="flex justify-between gap-4">
+                                <div>
+                                  <strong className="text-navy">{product.name}</strong>
+                                  <p className="mt-1 font-bold text-primary">${price.toFixed(2)}</p>
+                                </div>
+                                <span className="text-xs font-bold text-slate-500">{product.inStock ?? true ? 'In stock' : 'Special order'}</span>
+                              </div>
+                              <div className="mt-4 flex items-center gap-3">
+                                <button
+                                  type="button"
+                                  className="flex h-9 w-9 items-center justify-center rounded-lg border bg-white font-bold hover:bg-slate-50"
+                                  onClick={() => setProducts((current) => ({
+                                    ...current,
+                                    [application.applicationId]: {
+                                      ...selection,
+                                      items: { ...selection.items, [product.id]: Math.max(0, quantity - 1) },
+                                    },
+                                  }))}
+                                >
+                                  -
+                                </button>
+                                <span className="w-8 text-center font-bold text-navy">{quantity}</span>
+                                <button
+                                  type="button"
+                                  className="flex h-9 w-9 items-center justify-center rounded-lg border bg-white font-bold hover:bg-slate-50"
+                                  onClick={() => setProducts((current) => ({
+                                    ...current,
+                                    [application.applicationId]: {
+                                      ...selection,
+                                      items: { ...selection.items, [product.id]: quantity + 1 },
+                                    },
+                                  }))}
+                                >
+                                  +
+                                </button>
+                              </div>
+                            </div>
+                          )
+                        })}
+                        {!available.length && (
+                          <p className="col-span-full rounded-xl bg-mist p-4 text-sm font-semibold text-slate-600">
+                            No equipment items required for this service.
+                          </p>
+                        )}
+                      </div>
+                    )}
+                  </section>
+                )
+              })}
+            </div>
+          </>
+        )}
 
-        {step === 8 && <><StepTitle title="Review agreements and submit" description="Review the generated agreements, choose a signing method, and authorize your application." /><div className="space-y-6">{applications.map((application) => <section key={application.applicationId} className="rounded-2xl border border-slate-200 p-5"><h3 className="font-extrabold capitalize text-navy">{application.solution.replaceAll('-', ' ')} agreements</h3><div className="mt-3 space-y-2">{(agreements[application.applicationId] || []).map((document) => { const url = document.signedFileUrl?.url || document.unsignedFileUrl?.url; return <a key={document.agreementId} href={url} target="_blank" rel="noreferrer" className="flex items-center justify-between rounded-xl bg-slate-50 px-4 py-3 font-semibold text-primary hover:bg-mist"><span>{document.title || document.unsignedFileUrl?.originalname || 'Merchant agreement'}</span><span className="text-xs uppercase">{document.status || 'Review'}</span></a>})}{!(agreements[application.applicationId] || []).length && <p className="text-sm text-slate-500">Standard merchant terms and conditions apply to this application.</p>}</div></section>)}</div><fieldset className="mt-7"><legend className="font-extrabold text-navy">Signature method</legend><div className="mt-3 grid gap-3 sm:grid-cols-2">{[['electronic', 'Electronic signature'], ['email', 'Email for signature']].map(([value, label]) => <label key={value} className={`flex cursor-pointer items-center gap-3 rounded-xl border p-4 font-bold ${signatureMethod === value ? 'border-primary bg-mist text-primary' : 'border-slate-200'}`}><input type="radio" name="signatureMethod" value={value} checked={signatureMethod === value} onChange={() => setSignatureMethod(value)} className="accent-primary" />{label}</label>)}</div></fieldset>{signatureMethod === 'electronic' && <div className="mt-7"><h3 className="mb-3 font-extrabold text-navy">Draw your signature</h3><SignaturePad onChange={setSignature} />{errors.signature && <p className="mt-2 font-bold text-rose-600">{errors.signature}</p>}</div>}<label className={`mt-7 flex items-start gap-3 rounded-xl border p-4 font-semibold ${errors.accepted ? 'border-rose-400 bg-rose-50' : 'border-slate-200'}`}><input type="checkbox" checked={accepted} onChange={(event) => setAccepted(event.target.checked)} className="mt-0.5 h-5 w-5 shrink-0 accent-primary" /><span>I have reviewed and agree to all terms and conditions, and certify that the information provided is complete and accurate.</span></label>{errors.accepted && <p className="mt-2 font-bold text-rose-600">{errors.accepted}</p>}</>}
+        {/* Step 6: Preferences */}
+        {step === 6 && (
+          <>
+            <StepTitle title="Application preferences" description="Configure service-specific preferences supplied by our application system." />
+            <div className="space-y-9">
+              {applications.map((application) => {
+                const definitions = catalog.preferences
+                  .filter((item) => item.formName === preferenceForms[application.solution])
+                  .sort((a, b) => Number(a.order || 0) - Number(b.order || 0))
+                const appValues = preferences[application.applicationId] || {}
+                return (
+                  <section key={application.applicationId} className="rounded-2xl border border-slate-200 p-5 sm:p-6">
+                    <h3 className="mb-4 text-lg font-extrabold capitalize text-navy">{getServiceLabel(application.solution)}</h3>
+                    <div className="grid gap-5 sm:grid-cols-2">
+                      {definitions.map((definition) => {
+                        const setValue = (value) => setPreferences((current) => ({
+                          ...current,
+                          [application.applicationId]: { ...appValues, [definition.name]: value },
+                        }))
+                        if (definition.preference === 'switch') {
+                          return (
+                            <label key={definition.name} className="flex items-center gap-3 rounded-xl border border-slate-200 p-4 font-bold text-navy">
+                              <input
+                                type="checkbox"
+                                checked={Boolean(appValues[definition.name])}
+                                onChange={(event) => setValue(event.target.checked)}
+                                className="h-5 w-5 accent-primary"
+                              />
+                              {definition.name}
+                            </label>
+                          )
+                        }
+                        if (definition.preference === 'dropdown') {
+                          return (
+                            <SelectField
+                              key={definition.name}
+                              id={`pref-${application.applicationId}-${definition.order}`}
+                              label={definition.name}
+                              value={appValues[definition.name] || ''}
+                              onChange={(event) => setValue(event.target.value)}
+                              options={(definition.extra || []).map((item) => typeof item === 'string' ? item : { value: item.value || item.title || item.name, label: item.title || item.name || item.value })}
+                            />
+                          )
+                        }
+                        return (
+                          <Field
+                            key={definition.name}
+                            id={`pref-${application.applicationId}-${definition.order}`}
+                            label={definition.name}
+                            type={definition.preference === 'datePicker' ? 'date' : definition.preference === 'timePicker' ? 'time' : 'text'}
+                            value={appValues[definition.name] || ''}
+                            onChange={(event) => setValue(event.target.value)}
+                          />
+                        )
+                      })}
+                      {!definitions.length && (
+                        <p className="col-span-full rounded-xl bg-mist p-4 text-sm font-semibold text-slate-600">
+                          No additional configuration needed for this service.
+                        </p>
+                      )}
+                    </div>
+                  </section>
+                )
+              })}
+            </div>
+          </>
+        )}
 
+        {/* Step 7: Delivery & Payment */}
+        {step === 7 && (
+          <>
+            <StepTitle title="Delivery and payment" description="Choose how each equipment order should be fulfilled and paid." />
+            <div className="space-y-10">
+              {applications.map((application) => {
+                const form = shipments[application.applicationId]
+                if (!form) return null
+                const ownHardware = products[application.applicationId]?.own
+                const inStockAmount = getInStockTotal(application.applicationId)
+
+                return (
+                  <section key={application.applicationId} className="rounded-2xl border border-slate-200 p-5 sm:p-6">
+                    <h3 className="text-lg font-extrabold capitalize text-navy">{getServiceLabel(application.solution)}</h3>
+                    {errors[`shipment-${application.applicationId}`] && (
+                      <p className="mt-3 font-bold text-rose-600">{errors[`shipment-${application.applicationId}`]}</p>
+                    )}
+                    {errors[`payment-${application.applicationId}`] && (
+                      <p className="mt-3 font-bold text-rose-600">{errors[`payment-${application.applicationId}`]}</p>
+                    )}
+
+                    {/* Fulfillment Method */}
+                    <div className="mt-5 grid gap-3 sm:grid-cols-3">
+                      {(ownHardware ? ['MerchantOwned'] : ['Shipping', 'Pickup', 'MerchantOwned']).map((type) => (
+                        <button
+                          key={type}
+                          type="button"
+                          onClick={() => setShipment(application.applicationId, 'type', type)}
+                          className={`rounded-xl border px-4 py-3 font-bold transition ${form.type === type ? 'border-primary bg-mist text-primary shadow-sm' : 'border-slate-200 hover:border-slate-300'}`}
+                        >
+                          {type === 'MerchantOwned' ? 'Merchant-Owned' : type}
+                        </button>
+                      ))}
+                    </div>
+
+                    {/* Shipping Form */}
+                    {form.type === 'Shipping' && !ownHardware && (
+                      <div className="mt-6 grid gap-5 sm:grid-cols-2">
+                        <Field id={`recipient-${application.applicationId}`} label="Recipient Name" required value={form.recipientName} onChange={(event) => setShipment(application.applicationId, 'recipientName', event.target.value)} />
+                        <Field id={`company-${application.applicationId}`} label="Company Name" value={form.companyName} onChange={(event) => setShipment(application.applicationId, 'companyName', event.target.value)} />
+                        <Field id={`recipient-phone-${application.applicationId}`} label="Phone Number" required value={form.recipientPhone} onChange={(event) => setShipment(application.applicationId, 'recipientPhone', phone(event.target.value))} />
+                        <Field id={`shipping-email-${application.applicationId}`} label="Email Address" required type="email" value={form.email} onChange={(event) => setShipment(application.applicationId, 'email', event.target.value)} />
+                        <Field id={`shipping-address-${application.applicationId}`} label="Shipping Address" required value={form.address} onChange={(event) => setShipment(application.applicationId, 'address', event.target.value)} />
+                        <Field id={`shipping-floor-${application.applicationId}`} label="Floor / Suite / Street 2" value={form.floorStreet} onChange={(event) => setShipment(application.applicationId, 'floorStreet', event.target.value)} />
+                        <Field id={`shipping-city-${application.applicationId}`} label="City" required value={form.city} onChange={(event) => setShipment(application.applicationId, 'city', event.target.value)} />
+                        <SelectField id={`shipping-state-${application.applicationId}`} label="State" required value={form.state} onChange={(event) => setShipment(application.applicationId, 'state', event.target.value)} options={states} />
+                        <Field id={`shipping-zip-${application.applicationId}`} label="ZIP Code" required value={form.zipCode} onChange={(event) => setShipment(application.applicationId, 'zipCode', event.target.value)} />
+                      </div>
+                    )}
+
+                    {/* Pickup Form */}
+                    {form.type === 'Pickup' && !ownHardware && (
+                      <div className="mt-6 grid gap-5 sm:grid-cols-2">
+                        <Field id={`pickup-loc-${application.applicationId}`} label="Pickup Location Name" required value={form.pickupLocationName} onChange={(event) => setShipment(application.applicationId, 'pickupLocationName', event.target.value)} />
+                        <Field id={`pickup-contact-${application.applicationId}`} label="Contact Name" required value={form.contactName} onChange={(event) => setShipment(application.applicationId, 'contactName', event.target.value)} />
+                        <Field id={`pickup-date-${application.applicationId}`} label="Pickup Date" required type="date" value={form.pickupDate} onChange={(event) => setShipment(application.applicationId, 'pickupDate', event.target.value)} />
+                        <Field id={`pickup-notes-${application.applicationId}`} label="Special Instructions" value={form.specialInstructions} onChange={(event) => setShipment(application.applicationId, 'specialInstructions', event.target.value)} />
+                      </div>
+                    )}
+
+                    {/* Payment Form (if equipment needed) */}
+                    {form.type !== 'MerchantOwned' && !ownHardware && (
+                      <div className="mt-8 border-t border-slate-200 pt-7">
+                        <h4 className="font-extrabold text-navy">Payment Transaction</h4>
+                        <div className="mt-4 grid gap-3 sm:grid-cols-3">
+                          {['Pay Now', 'Lease', 'Pay Later'].map((paymentType) => (
+                            <button
+                              key={paymentType}
+                              type="button"
+                              onClick={() => setShipment(application.applicationId, 'paymentType', paymentType)}
+                              className={`rounded-xl border px-4 py-3 font-bold transition ${form.paymentType === paymentType ? 'border-primary bg-mist text-primary shadow-sm' : 'border-slate-200 hover:border-slate-300'}`}
+                            >
+                              {paymentType}
+                            </button>
+                          ))}
+                        </div>
+
+                        {form.paymentType === 'Pay Now' && (
+                          <div className="mt-6 space-y-5">
+                            <div className="rounded-xl border border-primary/20 bg-mist p-4">
+                              <p className="text-sm font-bold text-navy">
+                                Amount to pay now: <span className="text-primary">${inStockAmount.toFixed(2)}</span> (in-stock items only)
+                              </p>
+                            </div>
+                            <div className="grid gap-5 sm:grid-cols-2">
+                              <Field id={`nameOnCard-${application.applicationId}`} label="Name on Card" required value={form.nameOnCard} onChange={(event) => setShipment(application.applicationId, 'nameOnCard', event.target.value)} />
+                              <Field id={`cardNumber-${application.applicationId}`} label="Card Number" required value={form.cardNumber} onChange={(event) => setShipment(application.applicationId, 'cardNumber', formatCardNumber(event.target.value))} placeholder="XXXX XXXX XXXX XXXX" maxLength={23} />
+                              <Field
+                                id={`expiryDate-${application.applicationId}`}
+                                label="Expiry Date (MM/YY)"
+                                required
+                                value={form.expiryDate}
+                                onChange={(event) => setShipment(application.applicationId, 'expiryDate', formatExpiryInput(event.target.value))}
+                                placeholder="MM/YY"
+                                maxLength={7}
+                              />
+                              <Field id={`cvv-${application.applicationId}`} label="CVV" required type="password" value={form.cvv} onChange={(event) => setShipment(application.applicationId, 'cvv', digits(event.target.value, 4))} maxLength={4} />
+                              <div className="sm:col-span-2">
+                                <Field id={`cardBillingAddress-${application.applicationId}`} label="Billing Address" required value={form.billingAddress} onChange={(event) => setShipment(application.applicationId, 'billingAddress', event.target.value)} />
+                              </div>
+                            </div>
+                          </div>
+                        )}
+
+                        {form.paymentType === 'Lease' && (
+                          <div className="mt-6 grid gap-5 sm:grid-cols-2">
+                            <Field id={`leaseTerm-${application.applicationId}`} label="Lease Term (Months)" required value={form.leaseTerm} onChange={(event) => setShipment(application.applicationId, 'leaseTerm', event.target.value)} />
+                            <Field id={`monthlyPayment-${application.applicationId}`} label="Monthly Payment ($)" required type="number" min="0" step="0.01" value={form.monthlyPayment} onChange={(event) => setShipment(application.applicationId, 'monthlyPayment', event.target.value)} />
+                            <Field id={`startDate-${application.applicationId}`} label="Start Date" required type="date" value={form.startDate} onChange={(event) => setShipment(application.applicationId, 'startDate', event.target.value)} />
+                            <Field id={`leaseBillingAddress-${application.applicationId}`} label="Billing Address" required value={form.billingAddress} onChange={(event) => setShipment(application.applicationId, 'billingAddress', event.target.value)} />
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </section>
+                )
+              })}
+            </div>
+          </>
+        )}
+
+        {/* Step 8: Submit & Agreements */}
+        {step === 8 && (
+          <>
+            <StepTitle title="Review agreements and submit" description="Review the generated agreements, choose a signing method, and authorize your application." />
+
+            {loadingAgreements ? (
+              <div className="my-16 text-center">
+                <LoaderCircle className="mx-auto animate-spin text-primary" size={36} />
+                <p className="mt-3 text-sm font-bold text-slate-600">Generating agreement documents...</p>
+              </div>
+            ) : (
+              <div className="space-y-8">
+                {applications.map((application) => {
+                  const appId = application.applicationId
+                  const docs = agreements[appId] || []
+                  const hasDocs = docs.length > 0
+                  const isSigned = Boolean(signedByApp[appId])
+                  const emailedTo = emailSentByApp[appId]
+                  const currentSignMethod = signMethodByApp[appId] || 'electronic'
+                  const isChecked = Boolean(checkedByApp[appId])
+                  const agreementNames = docs.map((d) => d.title).filter(Boolean).join(', ')
+
+                  return (
+                    <section key={appId} className="rounded-2xl border border-slate-200 p-5 sm:p-6">
+                      <div className="flex flex-wrap items-center justify-between gap-3">
+                        <h3 className="text-xl font-extrabold text-navy">{getServiceLabel(application.solution)}</h3>
+                        {hasDocs && (
+                          <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-bold ${isSigned ? 'bg-emerald-50 text-emerald-700' : emailedTo ? 'bg-blue-50 text-blue-700' : currentSignMethod === 'email' ? 'bg-blue-50 text-blue-700' : 'bg-mist text-primary'}`}>
+                            {isSigned ? '✓ Signed' : emailedTo ? `Emailed to ${emailedTo}` : currentSignMethod === 'email' ? 'Email for signature' : 'Electronic signature'}
+                          </span>
+                        )}
+                      </div>
+
+                      {hasDocs ? (
+                        <>
+                          <div className="mt-4 flex items-start gap-3 rounded-xl border border-primary/20 bg-mist p-4">
+                            <Info size={20} className="shrink-0 text-primary" />
+                            <p className="text-sm font-medium leading-6 text-slate-700">
+                              {docs.length > 1
+                                ? `Please review the following agreements generated for your application: ${agreementNames}. Click Review & Sign below to sign your agreements before final submission.`
+                                : `Please review the agreement generated for your application. Click Review & Sign below to sign your agreement before final submission.`}
+                            </p>
+                          </div>
+
+                          {!isSigned && !emailedTo && (
+                            <div className="mt-6">
+                              <p className="mb-3 text-sm font-extrabold text-navy">Choose how you want to sign the agreement</p>
+                              <div className="grid gap-4 sm:grid-cols-2">
+                                <button
+                                  type="button"
+                                  onClick={() => setSignMethodByApp((prev) => ({ ...prev, [appId]: 'electronic' }))}
+                                  className={`flex flex-col justify-between rounded-2xl border p-5 text-left transition ${currentSignMethod === 'electronic' ? 'border-primary bg-mist shadow-sm' : 'border-slate-200 hover:border-primary/50'}`}
+                                >
+                                  <div>
+                                    <div className="flex items-center justify-between gap-2">
+                                      <div className="flex items-center gap-3">
+                                        <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                                          <PencilLine size={20} />
+                                        </span>
+                                        <strong className="text-navy">Electronic Signature</strong>
+                                      </div>
+                                      <span className="rounded-full bg-primary/10 px-2.5 py-0.5 text-xs font-bold text-primary">Recommended</span>
+                                    </div>
+                                    <p className="mt-3 text-xs leading-5 text-slate-600">Sign the agreement directly in your browser using our secure e-signature pad.</p>
+                                  </div>
+                                  <ul className="mt-4 space-y-1.5 border-t border-slate-200/60 pt-3 text-xs font-semibold text-slate-700">
+                                    <li className="flex items-center gap-1.5"><Check size={14} className="text-primary" /> Fast and secure</li>
+                                    <li className="flex items-center gap-1.5"><Check size={14} className="text-primary" /> Legally binding e-sign</li>
+                                  </ul>
+                                </button>
+
+                                <button
+                                  type="button"
+                                  onClick={() => setSignMethodByApp((prev) => ({ ...prev, [appId]: 'email' }))}
+                                  className={`flex flex-col justify-between rounded-2xl border p-5 text-left transition ${currentSignMethod === 'email' ? 'border-primary bg-mist shadow-sm' : 'border-slate-200 hover:border-primary/50'}`}
+                                >
+                                  <div>
+                                    <div className="flex items-center gap-3">
+                                      <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-100 text-slate-700">
+                                        <Mail size={20} />
+                                      </span>
+                                      <strong className="text-navy">Email for Signature</strong>
+                                    </div>
+                                    <p className="mt-3 text-xs leading-5 text-slate-600">We will send the agreement documents to your email for signature review.</p>
+                                  </div>
+                                  <ul className="mt-4 space-y-1.5 border-t border-slate-200/60 pt-3 text-xs font-semibold text-slate-700">
+                                    <li className="flex items-center gap-1.5"><Check size={14} className="text-primary" /> Receive in inbox</li>
+                                    <li className="flex items-center gap-1.5"><Check size={14} className="text-primary" /> Sign at your convenience</li>
+                                  </ul>
+                                </button>
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Action Bar for Documents */}
+                          <div className="mt-5 flex flex-wrap items-center justify-between gap-3 rounded-xl bg-slate-50 p-4">
+                            <div className="flex items-center gap-2">
+                              <FileText size={18} className="text-slate-500" />
+                              <span className="text-sm font-bold text-navy">
+                                {docs.length} Agreement Document{docs.length > 1 ? 's' : ''}
+                              </span>
+                            </div>
+                            <div className="flex flex-wrap items-center gap-2">
+                              {!isSigned && currentSignMethod === 'electronic' && (
+                                <Button type="button" size="sm" onClick={() => handleOpenPdfModal(appId)}>
+                                  <PencilLine size={15} /> Review & Sign
+                                </Button>
+                              )}
+                              {isSigned && (
+                                <>
+                                  <Button type="button" size="sm" variant="outline" onClick={() => handleOpenPdfModal(appId)}>
+                                    <Eye size={15} /> View Signed PDF
+                                  </Button>
+                                  {summaryUrlByApp[appId] && (
+                                    <Button type="button" size="sm" variant="outline" onClick={() => downloadAgreementSummary(appId)}>
+                                      <Download size={15} /> Download Summary
+                                    </Button>
+                                  )}
+                                </>
+                              )}
+                            </div>
+                          </div>
+                        </>
+                      ) : (
+                        <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-5 text-sm leading-6 text-slate-600">
+                          <p className="font-semibold text-navy">Terms and Conditions</p>
+                          <p className="mt-2">
+                            By submitting this application, you agree to provide accurate and complete information. We reserve the right to verify all information provided and may request additional documentation.
+                          </p>
+                        </div>
+                      )}
+
+                      {/* Acceptance Checkbox */}
+                      <label className="mt-6 flex cursor-pointer items-start gap-3 text-sm font-bold text-slate-700">
+                        <input
+                          type="checkbox"
+                          checked={isChecked}
+                          onChange={(e) => {
+                            const checked = e.target.checked
+                            setCheckedByApp((prev) => ({ ...prev, [appId]: checked }))
+                            if (checked) {
+                              setErrors((prev) => ({ ...prev, accepted: '' }))
+                              setError('')
+                            }
+                          }}
+                          className="mt-0.5 h-5 w-5 accent-primary"
+                        />
+                        <span>I have read and agree to all terms and conditions for {getServiceLabel(application.solution)}.</span>
+                      </label>
+                      {!isChecked && errors.accepted && (
+                        <p className="mt-2 text-xs font-bold text-rose-600">Please check the box to agree to terms.</p>
+                      )}
+                    </section>
+                  )
+                })}
+              </div>
+            )}
+            {errors.accepted && (
+              <p className="mt-4 rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm font-bold text-rose-700">
+                {errors.accepted}
+              </p>
+            )}
+          </>
+        )}
+
+        {/* Navigation Buttons */}
         <div className="mt-10 flex flex-col-reverse justify-between gap-3 border-t border-slate-200 pt-6 sm:flex-row">
-          {step > 0 ? <Button type="button" variant="outline" onClick={back} disabled={loading} className="w-full sm:w-auto"><ArrowLeft size={18} /> Back</Button> : <span />}
-          <Button type="button" onClick={next} disabled={loading || loadingData} aria-busy={loading} className="w-full sm:w-auto">{loading ? <><LoaderCircle className="animate-spin" size={18} /> Saving...</> : step === 8 ? <>Submit Application <CheckCircle2 size={18} /></> : <>Save and Continue <ArrowRight size={18} /></>}</Button>
+          {step > 0 ? (
+            <Button type="button" variant="outline" onClick={back} disabled={loading || sendingEmail} className="w-full sm:w-auto">
+              <ArrowLeft size={18} /> Back
+            </Button>
+          ) : <span />}
+
+          <Button
+            type="button"
+            onClick={next}
+            disabled={loading || loadingData || loadingAgreements || sendingEmail}
+            aria-busy={loading || sendingEmail}
+            className="w-full sm:w-auto"
+          >
+            {loading || sendingEmail ? (
+              <><LoaderCircle className="animate-spin" size={18} /> {sendingEmail ? 'Sending...' : 'Saving...'}</>
+            ) : step === 8 ? (
+              <>Submit Application <CheckCircle2 size={18} /></>
+            ) : (
+              <>Save and Continue <ArrowRight size={18} /></>
+            )}
+          </Button>
         </div>
       </div>
+
+      {/* PDF Document Review Modal */}
+      <PdfReviewModal
+        isOpen={isPdfModalOpen}
+        onClose={() => setIsPdfModalOpen(false)}
+        documents={activeDocs}
+        activeDocIndex={activeDocIndex}
+        onSelectDocIndex={(idx) => {
+          setViewingSummary(false)
+          setActiveDocIndex(idx)
+        }}
+        viewingSummary={viewingSummary}
+        summaryUrl={activeAppId ? summaryUrlByApp[activeAppId] : null}
+        onToggleSummary={() => setViewingSummary(!viewingSummary)}
+        onDownloadSummary={() => activeAppId && downloadAgreementSummary(activeAppId)}
+        onOpenSignModal={() => {
+          setIsPdfModalOpen(false)
+          setShowSignatureModal(true)
+        }}
+        onSubmitFinal={() => {
+          setIsPdfModalOpen(false)
+          submitFinalApplications()
+        }}
+        isAllSigned={activeIsAllSigned}
+      />
+
+      {/* Signature Canvas / Typed Signature Modal */}
+      <SignatureModal
+        isOpen={showSignatureModal}
+        onClose={() => {
+          setShowSignatureModal(false)
+          setIsPdfModalOpen(true)
+        }}
+        onSubmit={handleSignatureSubmit}
+        isSigning={isSigningDoc}
+      />
     </div>
   )
 }
