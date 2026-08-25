@@ -15,7 +15,6 @@ import {
   Info,
   Landmark,
   LoaderCircle,
-  Mail,
   MonitorSmartphone,
   PackageCheck,
   PenLine,
@@ -37,7 +36,6 @@ import {
   extractFileReference,
   fetchAgreementSummary,
   saveApplication,
-  sendAgreementEmail,
   signAgreementDocument,
   unwrapData,
   uploadApplicationFile,
@@ -98,6 +96,17 @@ const preferenceForms = {
   airvac: 'airvac1',
   website: 'website1',
   'ach-processing': 'ach-processing1',
+}
+
+const merchantOwnedForms = {
+  atm: 'merchantOwnedAtm',
+  'credit-card': 'merchantOwnedCreditCard',
+  'cash-advance': 'merchantOwnedCashAdvance',
+  pos: 'merchantOwnedPos',
+  ebt: 'merchantOwnedEbt',
+  airvac: 'merchantOwnedAirvac',
+  website: 'merchantOwnedWebsite',
+  'ach-processing': 'merchantOwnedAchProcessing',
 }
 
 const initialValues = {
@@ -188,6 +197,19 @@ function validateCardExpiry(rawExpiryDate) {
     return 'Expiry date must be in the future.'
   }
   return null
+}
+
+function isItemInStock(item) {
+  if (!item) return false
+  return Boolean(
+    item.isStock === true ||
+    item.inStock === true ||
+    item.isInStock === true ||
+    item.isAvailable === true ||
+    (typeof item.stock === 'number' && item.stock > 0) ||
+    (typeof item.quantityInStock === 'number' && item.quantityInStock > 0) ||
+    (typeof item.inventoryQuantity === 'number' && item.inventoryQuantity > 0)
+  )
 }
 
 function isValidLuhn(cardNumber) {
@@ -660,7 +682,15 @@ function validate(step, values, selectedSolutions, plans, products, shipments, c
             errors[`shipment-${id}`] = 'Complete all required pickup fields.'
           }
         }
-        if (form.paymentType === 'Pay Now') {
+
+        const hasInStock = products[id] && !products[id].own && Object.entries(products[id].items || {}).some(([itemId, qty]) => {
+          if (!qty || qty <= 0) return false
+          const prod = (catalog.products || []).find((p) => String(p.id) === String(itemId))
+          return isItemInStock(prod)
+        })
+        const effectivePaymentType = (!hasInStock && form.paymentType === 'Pay Now') ? 'Pay Later' : form.paymentType
+
+        if (effectivePaymentType === 'Pay Now' && hasInStock) {
           const cleanCard = digits(form.cardNumber, 20)
           if (!form.nameOnCard || cleanCard.length < 13 || !form.expiryDate || !form.cvv || !form.billingAddress) {
             errors[`payment-${id}`] = 'Complete all required card details.'
@@ -671,7 +701,7 @@ function validate(step, values, selectedSolutions, plans, products, shipments, c
             if (expiryError) errors[`payment-${id}`] = expiryError
           }
         }
-        if (form.paymentType === 'Lease') {
+        if (effectivePaymentType === 'Lease') {
           if (!form.leaseTerm || !form.monthlyPayment || !form.startDate || !form.billingAddress) {
             errors[`payment-${id}`] = 'Complete all required lease details.'
           }
@@ -702,9 +732,7 @@ export default function ApplicationFlow({ onComplete }) {
   const [shipments, setShipments] = useState({})
   const [agreements, setAgreements] = useState({})
   const [checkedByApp, setCheckedByApp] = useState({})
-  const [signMethodByApp, setSignMethodByApp] = useState({})
   const [signedByApp, setSignedByApp] = useState({})
-  const [emailSentByApp, setEmailSentByApp] = useState({})
   const [summaryUrlByApp, setSummaryUrlByApp] = useState({})
   const [uploadedSignatures, setUploadedSignatures] = useState({})
   const [errors, setErrors] = useState({})
@@ -712,7 +740,6 @@ export default function ApplicationFlow({ onComplete }) {
   const [loading, setLoading] = useState(false)
   const [loadingData, setLoadingData] = useState(true)
   const [loadingAgreements, setLoadingAgreements] = useState(false)
-  const [sendingEmail, setSendingEmail] = useState(false)
   const [isPdfModalOpen, setIsPdfModalOpen] = useState(false)
   const [showSignatureModal, setShowSignatureModal] = useState(false)
   const [activeAppId, setActiveAppId] = useState(null)
@@ -777,7 +804,6 @@ export default function ApplicationFlow({ onComplete }) {
     const forms = {}
     const selections = {}
     const checked = {}
-    const signMethods = {}
     applications.forEach((application) => {
       forms[application.applicationId] = {
         type: 'Shipping',
@@ -795,6 +821,7 @@ export default function ApplicationFlow({ onComplete }) {
         contactName: values.ownerFirstName ? `${values.ownerFirstName} ${values.ownerLastName}` : '',
         pickupDate: '',
         specialInstructions: '',
+        merchantOwnedPreferences: {},
         nameOnCard: values.businessName || values.legalName || '',
         cardNumber: '',
         expiryDate: '',
@@ -806,12 +833,10 @@ export default function ApplicationFlow({ onComplete }) {
       }
       selections[application.applicationId] = { own: false, items: {} }
       checked[application.applicationId] = false
-      signMethods[application.applicationId] = 'electronic'
     })
     setShipments(forms)
     setProducts(selections)
     setCheckedByApp((current) => ({ ...checked, ...current }))
-    setSignMethodByApp((current) => ({ ...signMethods, ...current }))
   }, [applications, shipments, values])
 
   // Fetch agreement documents for Step 8
@@ -879,13 +904,24 @@ export default function ApplicationFlow({ onComplete }) {
     return result?.dLFileUrl || result?.bankLetterFileUrl || result?.fileUrl || result
   }))
 
+  const appHasInStockItems = (applicationId) => {
+    const selection = products[applicationId] || { own: false, items: {} }
+    if (selection.own) return false
+    const selectedEntries = Object.entries(selection.items || {}).filter(([, qty]) => qty > 0)
+    if (!selectedEntries.length) return false
+    return selectedEntries.some(([id]) => {
+      const product = catalog.products.find((p) => String(p.id) === String(id))
+      return isItemInStock(product)
+    })
+  }
+
   const getInStockTotal = (applicationId) => {
     const selection = products[applicationId] || { own: false, items: {} }
     if (selection.own) return 0
     return Object.entries(selection.items || {}).reduce((total, [id, qty]) => {
       if (!qty || qty <= 0) return total
       const item = catalog.products.find((p) => String(p.id) === String(id))
-      if (!item) return total
+      if (!item || !isItemInStock(item)) return total
       const price = Number(item.sellingPrice ?? item.price ?? 0)
       return total + price * qty
     }, 0)
@@ -1015,7 +1051,7 @@ export default function ApplicationFlow({ onComplete }) {
                 name: item.name,
                 price: item.sellingPrice ?? item.price,
                 quantity,
-                inStock: item.inStock ?? true,
+                inStock: isItemInStock(item),
               }
             })
           return saveApplication({
@@ -1075,20 +1111,23 @@ export default function ApplicationFlow({ onComplete }) {
             if (form.specialInstructions) shipment.specialInstructions = form.specialInstructions
           }
 
+          const hasInStock = appHasInStockItems(application.applicationId)
+          const effectivePaymentType = (!hasInStock && form.paymentType === 'Pay Now') ? 'Pay Later' : form.paymentType
+
           const payload = {
             currentStep: 8,
             paymentMethod: isMerchantOwned
               ? 'merchantowned'
-              : form.paymentType === 'Lease'
+              : effectivePaymentType === 'Lease'
                 ? 'lease'
-                : form.paymentType === 'Pay Later'
+                : effectivePaymentType === 'Pay Later'
                   ? 'pay-later'
                   : 'card',
             shipment,
             applicationId: application.applicationId,
           }
 
-          if (!isMerchantOwned && form.paymentType === 'Pay Now') {
+          if (!isMerchantOwned && effectivePaymentType === 'Pay Now' && hasInStock) {
             const expiryAuthDate = getAuthorizeExpirationDate(form.expiryDate)
             const cleanCard = digits(form.cardNumber, 20)
             const inStockAmount = getInStockTotal(application.applicationId)
@@ -1111,11 +1150,11 @@ export default function ApplicationFlow({ onComplete }) {
             }
           }
 
-          if (!isMerchantOwned && form.paymentType === 'Pay Later') {
+          if (!isMerchantOwned && effectivePaymentType === 'Pay Later') {
             payload.payLater = true
           }
 
-          if (!isMerchantOwned && form.paymentType === 'Lease') {
+          if (!isMerchantOwned && effectivePaymentType === 'Lease') {
             shipment.leaseDetails = {
               leaseTerm: form.leaseTerm,
               monthlyPayment: form.monthlyPayment,
@@ -1200,7 +1239,6 @@ export default function ApplicationFlow({ onComplete }) {
         const nextApp = applications.find(
           (app) =>
             String(app.applicationId) !== String(activeAppId) &&
-            (signMethodByApp[app.applicationId] || 'electronic') === 'electronic' &&
             !signedByApp[app.applicationId] &&
             (agreements[app.applicationId] || []).some((d) => !d.signed)
         )
@@ -1262,51 +1300,17 @@ export default function ApplicationFlow({ onComplete }) {
     setLoading(true)
     try {
       if (step === 8) {
-        // Check for email signing apps that haven't sent yet
-        const pendingEmailApps = applications.filter((app) => {
-          const method = signMethodByApp[app.applicationId] || 'electronic'
-          const isSigned = Boolean(signedByApp[app.applicationId])
-          const isEmailed = Boolean(emailSentByApp[app.applicationId])
-          return method === 'email' && !isSigned && !isEmailed
-        })
-
-        if (pendingEmailApps.length > 0) {
-          setSendingEmail(true)
-          const recipientEmail = (values.email || values.ownerEmail || '').trim()
-          if (!recipientEmail) throw new Error('Merchant email is required to email agreements.')
-
-          for (const app of pendingEmailApps) {
-            const docs = agreements[app.applicationId] || []
-            const unsignedDocs = docs.filter((d) => !d.signed)
-            for (const doc of unsignedDocs) {
-              const filePayload = doc.unsignedFileUrl?.url ? {
-                url: doc.unsignedFileUrl.url,
-                originalname: doc.unsignedFileUrl.originalname || `${doc.title}.pdf`,
-                mimetype: doc.unsignedFileUrl.mimetype || 'application/pdf',
-              } : {
-                url: doc.url,
-                originalname: `${doc.title}.pdf`,
-                mimetype: 'application/pdf',
-              }
-              await sendAgreementEmail(app.applicationId, recipientEmail, filePayload)
-            }
-            setEmailSentByApp((prev) => ({ ...prev, [app.applicationId]: recipientEmail }))
-          }
-          setSendingEmail(false)
-        }
-
-        // Check if there are electronic applications with unsigned agreements
-        const unsignedElectronicApp = applications.find((app) => {
-          const method = signMethodByApp[app.applicationId] || 'electronic'
+        // Check if there are applications with unsigned agreements
+        const unsignedApp = applications.find((app) => {
           const isSigned = Boolean(signedByApp[app.applicationId])
           const docs = agreements[app.applicationId] || []
-          return method === 'electronic' && !isSigned && docs.length > 0
+          return !isSigned && docs.length > 0
         })
 
-        if (unsignedElectronicApp) {
-          const docs = agreements[unsignedElectronicApp.applicationId] || []
+        if (unsignedApp) {
+          const docs = agreements[unsignedApp.applicationId] || []
           const firstUnsignedIdx = docs.findIndex((d) => !d.signed)
-          setActiveAppId(unsignedElectronicApp.applicationId)
+          setActiveAppId(unsignedApp.applicationId)
           setActiveDocIndex(firstUnsignedIdx >= 0 ? firstUnsignedIdx : 0)
           setViewingSummary(false)
           setIsPdfModalOpen(true)
@@ -1335,7 +1339,6 @@ export default function ApplicationFlow({ onComplete }) {
       setError(nextError.message)
     } finally {
       setLoading(false)
-      setSendingEmail(false)
     }
   }
 
@@ -1350,6 +1353,19 @@ export default function ApplicationFlow({ onComplete }) {
     ...current,
     [id]: { ...current[id], [key]: value },
   }))
+
+  const updateMerchantOwnedPreference = (applicationId, key, value) => {
+    setShipments((current) => ({
+      ...current,
+      [applicationId]: {
+        ...current[applicationId],
+        merchantOwnedPreferences: {
+          ...(current[applicationId]?.merchantOwnedPreferences || {}),
+          [key]: value,
+        },
+      },
+    }))
+  }
 
   const businessFields = (prefix = '') => (
     <div className="grid gap-5 sm:grid-cols-2">
@@ -1657,7 +1673,7 @@ export default function ApplicationFlow({ onComplete }) {
                                   <strong className="text-navy">{product.name}</strong>
                                   <p className="mt-1 font-bold text-primary">${price.toFixed(2)}</p>
                                 </div>
-                                <span className="text-xs font-bold text-slate-500">{product.inStock ?? true ? 'In stock' : 'Special order'}</span>
+                                <span className="text-xs font-bold text-slate-500">{isItemInStock(product) ? 'In stock' : 'Special order'}</span>
                               </div>
                               <div className="mt-4 flex items-center gap-3">
                                 <button
@@ -1801,12 +1817,97 @@ export default function ApplicationFlow({ onComplete }) {
                           key={type}
                           type="button"
                           onClick={() => setShipment(application.applicationId, 'type', type)}
-                          className={`rounded-xl border px-4 py-3 font-bold transition ${form.type === type ? 'border-primary bg-mist text-primary shadow-sm' : 'border-slate-200 hover:border-slate-300'}`}
+                          className={`rounded-xl border px-4 py-3 font-bold transition ${(ownHardware || form.type === 'MerchantOwned' ? type === 'MerchantOwned' : form.type === type) ? 'border-primary bg-mist text-primary shadow-sm' : 'border-slate-200 hover:border-slate-300'}`}
                         >
                           {type === 'MerchantOwned' ? 'Merchant-Owned' : type}
                         </button>
                       ))}
                     </div>
+
+                    {/* Merchant-Owned Form */}
+                    {(form.type === 'MerchantOwned' || ownHardware) && (
+                      <div className="mt-6 space-y-5">
+                        <div className="rounded-xl border border-primary/20 bg-mist p-4">
+                          <p className="text-sm font-bold text-navy">
+                            Merchant-Owned Equipment Details
+                          </p>
+                          <p className="mt-1 text-xs text-slate-600">
+                            Please provide details about your existing equipment and terminal setup for this service.
+                          </p>
+                        </div>
+
+                        {(() => {
+                          const formName = merchantOwnedForms[application.solution]
+                          const preferenceDefs = (catalog.preferences || [])
+                            .filter((item) => item.formName === formName)
+                            .sort((a, b) => Number(a.order || 0) - Number(b.order || 0))
+
+                          if (!preferenceDefs.length) {
+                            return (
+                              <div className="rounded-xl border border-slate-200 bg-slate-50 p-6 text-center text-sm font-medium text-slate-500">
+                                No additional merchant-owned equipment preferences required for this service.
+                              </div>
+                            )
+                          }
+
+                          const moValues = form.merchantOwnedPreferences || {}
+
+                          return (
+                            <div className="grid gap-5 sm:grid-cols-2">
+                              {preferenceDefs.map((def) => {
+                                const val = moValues[def.name] ?? ''
+
+                                if (def.preference === 'switch') {
+                                  return (
+                                    <label
+                                      key={def.name}
+                                      className="flex items-center gap-3 rounded-xl border border-slate-200 p-4 font-bold text-navy"
+                                    >
+                                      <input
+                                        type="checkbox"
+                                        checked={Boolean(val)}
+                                        onChange={(e) => updateMerchantOwnedPreference(application.applicationId, def.name, e.target.checked)}
+                                        className="h-5 w-5 accent-primary"
+                                      />
+                                      {def.name}
+                                    </label>
+                                  )
+                                }
+
+                                if (def.preference === 'dropdown') {
+                                  const options = (def.extra || []).map((item) =>
+                                    typeof item === 'string'
+                                      ? item
+                                      : { value: item.value || item.title || item.name, label: item.title || item.name || item.value }
+                                  )
+                                  return (
+                                    <SelectField
+                                      key={def.name}
+                                      id={`mo-${application.applicationId}-${def.order}`}
+                                      label={def.name}
+                                      value={val}
+                                      onChange={(e) => updateMerchantOwnedPreference(application.applicationId, def.name, e.target.value)}
+                                      options={options}
+                                    />
+                                  )
+                                }
+
+                                return (
+                                  <Field
+                                    key={def.name}
+                                    id={`mo-${application.applicationId}-${def.order}`}
+                                    label={def.name}
+                                    type={def.preference === 'datePicker' ? 'date' : def.preference === 'timePicker' ? 'time' : 'text'}
+                                    value={val}
+                                    onChange={(e) => updateMerchantOwnedPreference(application.applicationId, def.name, e.target.value)}
+                                  />
+                                )
+                              })}
+                            </div>
+                          )
+                        })()}
+                      </div>
+                    )}
 
                     {/* Shipping Form */}
                     {form.type === 'Shipping' && !ownHardware && (
@@ -1834,59 +1935,77 @@ export default function ApplicationFlow({ onComplete }) {
                     )}
 
                     {/* Payment Form (if equipment needed) */}
-                    {form.type !== 'MerchantOwned' && !ownHardware && (
-                      <div className="mt-8 border-t border-slate-200 pt-7">
-                        <h4 className="font-extrabold text-navy">Payment Transaction</h4>
-                        <div className="mt-4 grid gap-3 sm:grid-cols-3">
-                          {['Pay Now', 'Lease', 'Pay Later'].map((paymentType) => (
-                            <button
-                              key={paymentType}
-                              type="button"
-                              onClick={() => setShipment(application.applicationId, 'paymentType', paymentType)}
-                              className={`rounded-xl border px-4 py-3 font-bold transition ${form.paymentType === paymentType ? 'border-primary bg-mist text-primary shadow-sm' : 'border-slate-200 hover:border-slate-300'}`}
-                            >
-                              {paymentType}
-                            </button>
-                          ))}
-                        </div>
+                    {form.type !== 'MerchantOwned' && !ownHardware && (() => {
+                      const hasInStock = appHasInStockItems(application.applicationId)
+                      const availablePaymentTypes = hasInStock
+                        ? ['Pay Now', 'Lease', 'Pay Later']
+                        : ['Lease', 'Pay Later']
+                      const activePaymentType = !hasInStock && form.paymentType === 'Pay Now'
+                        ? 'Pay Later'
+                        : form.paymentType
 
-                        {form.paymentType === 'Pay Now' && (
-                          <div className="mt-6 space-y-5">
-                            <div className="rounded-xl border border-primary/20 bg-mist p-4">
-                              <p className="text-sm font-bold text-navy">
-                                Amount to pay now: <span className="text-primary">${inStockAmount.toFixed(2)}</span> (in-stock items only)
-                              </p>
-                            </div>
-                            <div className="grid gap-5 sm:grid-cols-2">
-                              <Field id={`nameOnCard-${application.applicationId}`} label="Name on Card" required value={form.nameOnCard} onChange={(event) => setShipment(application.applicationId, 'nameOnCard', event.target.value)} />
-                              <Field id={`cardNumber-${application.applicationId}`} label="Card Number" required value={form.cardNumber} onChange={(event) => setShipment(application.applicationId, 'cardNumber', formatCardNumber(event.target.value))} placeholder="XXXX XXXX XXXX XXXX" maxLength={23} />
-                              <Field
-                                id={`expiryDate-${application.applicationId}`}
-                                label="Expiry Date (MM/YY)"
-                                required
-                                value={form.expiryDate}
-                                onChange={(event) => setShipment(application.applicationId, 'expiryDate', formatExpiryInput(event.target.value))}
-                                placeholder="MM/YY"
-                                maxLength={7}
-                              />
-                              <Field id={`cvv-${application.applicationId}`} label="CVV" required type="password" value={form.cvv} onChange={(event) => setShipment(application.applicationId, 'cvv', digits(event.target.value, 4))} maxLength={4} />
-                              <div className="sm:col-span-2">
-                                <Field id={`cardBillingAddress-${application.applicationId}`} label="Billing Address" required value={form.billingAddress} onChange={(event) => setShipment(application.applicationId, 'billingAddress', event.target.value)} />
+                      return (
+                        <div className="mt-8 border-t border-slate-200 pt-7">
+                          <h4 className="font-extrabold text-navy">Payment Transaction</h4>
+                          <div className={`mt-4 grid gap-3 ${availablePaymentTypes.length === 3 ? 'sm:grid-cols-3' : 'sm:grid-cols-2'}`}>
+                            {availablePaymentTypes.map((paymentType) => (
+                              <button
+                                key={paymentType}
+                                type="button"
+                                onClick={() => setShipment(application.applicationId, 'paymentType', paymentType)}
+                                className={`rounded-xl border px-4 py-3 font-bold transition ${activePaymentType === paymentType ? 'border-primary bg-mist text-primary shadow-sm' : 'border-slate-200 hover:border-slate-300'}`}
+                              >
+                                {paymentType}
+                              </button>
+                            ))}
+                          </div>
+
+                          {activePaymentType === 'Pay Now' && hasInStock && (
+                            <div className="mt-6 space-y-5">
+                              <div className="rounded-xl border border-primary/20 bg-mist p-4">
+                                <p className="text-sm font-bold text-navy">
+                                  Amount to pay now: <span className="text-primary">${inStockAmount.toFixed(2)}</span> (in-stock items only)
+                                </p>
+                              </div>
+                              <div className="grid gap-5 sm:grid-cols-2">
+                                <Field id={`nameOnCard-${application.applicationId}`} label="Name on Card" required value={form.nameOnCard} onChange={(event) => setShipment(application.applicationId, 'nameOnCard', event.target.value)} />
+                                <Field id={`cardNumber-${application.applicationId}`} label="Card Number" required value={form.cardNumber} onChange={(event) => setShipment(application.applicationId, 'cardNumber', formatCardNumber(event.target.value))} placeholder="XXXX XXXX XXXX XXXX" maxLength={23} />
+                                <Field
+                                  id={`expiryDate-${application.applicationId}`}
+                                  label="Expiry Date (MM/YY)"
+                                  required
+                                  value={form.expiryDate}
+                                  onChange={(event) => setShipment(application.applicationId, 'expiryDate', formatExpiryInput(event.target.value))}
+                                  placeholder="MM/YY"
+                                  maxLength={7}
+                                />
+                                <Field id={`cvv-${application.applicationId}`} label="CVV" required type="password" value={form.cvv} onChange={(event) => setShipment(application.applicationId, 'cvv', digits(event.target.value, 4))} maxLength={4} />
+                                <div className="sm:col-span-2">
+                                  <Field id={`cardBillingAddress-${application.applicationId}`} label="Billing Address" required value={form.billingAddress} onChange={(event) => setShipment(application.applicationId, 'billingAddress', event.target.value)} />
+                                </div>
                               </div>
                             </div>
-                          </div>
-                        )}
+                          )}
 
-                        {form.paymentType === 'Lease' && (
-                          <div className="mt-6 grid gap-5 sm:grid-cols-2">
-                            <Field id={`leaseTerm-${application.applicationId}`} label="Lease Term (Months)" required value={form.leaseTerm} onChange={(event) => setShipment(application.applicationId, 'leaseTerm', event.target.value)} />
-                            <Field id={`monthlyPayment-${application.applicationId}`} label="Monthly Payment ($)" required type="number" min="0" step="0.01" value={form.monthlyPayment} onChange={(event) => setShipment(application.applicationId, 'monthlyPayment', event.target.value)} />
-                            <Field id={`startDate-${application.applicationId}`} label="Start Date" required type="date" value={form.startDate} onChange={(event) => setShipment(application.applicationId, 'startDate', event.target.value)} />
-                            <Field id={`leaseBillingAddress-${application.applicationId}`} label="Billing Address" required value={form.billingAddress} onChange={(event) => setShipment(application.applicationId, 'billingAddress', event.target.value)} />
-                          </div>
-                        )}
-                      </div>
-                    )}
+                          {activePaymentType === 'Lease' && (
+                            <div className="mt-6 grid gap-5 sm:grid-cols-2">
+                              <Field id={`leaseTerm-${application.applicationId}`} label="Lease Term (Months)" required value={form.leaseTerm} onChange={(event) => setShipment(application.applicationId, 'leaseTerm', event.target.value)} />
+                              <Field id={`monthlyPayment-${application.applicationId}`} label="Monthly Payment ($)" required type="number" min="0" step="0.01" value={form.monthlyPayment} onChange={(event) => setShipment(application.applicationId, 'monthlyPayment', event.target.value)} />
+                              <Field id={`startDate-${application.applicationId}`} label="Start Date" required type="date" value={form.startDate} onChange={(event) => setShipment(application.applicationId, 'startDate', event.target.value)} />
+                              <Field id={`leaseBillingAddress-${application.applicationId}`} label="Billing Address" required value={form.billingAddress} onChange={(event) => setShipment(application.applicationId, 'billingAddress', event.target.value)} />
+                            </div>
+                          )}
+
+                          {activePaymentType === 'Pay Later' && (
+                            <div className="mt-6 rounded-xl border border-slate-200 bg-slate-50 p-4">
+                              <p className="text-sm font-semibold text-slate-600">
+                                Payment will be collected later. Complete this step now; you can pay when your invoice is due.
+                              </p>
+                            </div>
+                          )}
+                        </div>
+                      )
+                    })()}
                   </section>
                 )
               })}
@@ -1897,7 +2016,7 @@ export default function ApplicationFlow({ onComplete }) {
         {/* Step 8: Submit & Agreements */}
         {step === 8 && (
           <>
-            <StepTitle title="Review agreements and submit" description="Review the generated agreements, choose a signing method, and authorize your application." />
+            <StepTitle title="Review agreements and submit" description="Review the generated agreements, sign electronically, and authorize your application." />
 
             {loadingAgreements ? (
               <div className="my-16 text-center">
@@ -1911,8 +2030,6 @@ export default function ApplicationFlow({ onComplete }) {
                   const docs = agreements[appId] || []
                   const hasDocs = docs.length > 0
                   const isSigned = Boolean(signedByApp[appId])
-                  const emailedTo = emailSentByApp[appId]
-                  const currentSignMethod = signMethodByApp[appId] || 'electronic'
                   const isChecked = Boolean(checkedByApp[appId])
                   const agreementNames = docs.map((d) => d.title).filter(Boolean).join(', ')
 
@@ -1921,8 +2038,8 @@ export default function ApplicationFlow({ onComplete }) {
                       <div className="flex flex-wrap items-center justify-between gap-3">
                         <h3 className="text-xl font-extrabold text-navy">{getServiceLabel(application.solution)}</h3>
                         {hasDocs && (
-                          <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-bold ${isSigned ? 'bg-emerald-50 text-emerald-700' : emailedTo ? 'bg-blue-50 text-blue-700' : currentSignMethod === 'email' ? 'bg-blue-50 text-blue-700' : 'bg-mist text-primary'}`}>
-                            {isSigned ? '✓ Signed' : emailedTo ? `Emailed to ${emailedTo}` : currentSignMethod === 'email' ? 'Email for signature' : 'Electronic signature'}
+                          <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-bold ${isSigned ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'}`}>
+                            {isSigned ? <><Check size={14} /> Signed</> : 'Signature Required'}
                           </span>
                         )}
                       </div>
@@ -1933,60 +2050,10 @@ export default function ApplicationFlow({ onComplete }) {
                             <Info size={20} className="shrink-0 text-primary" />
                             <p className="text-sm font-medium leading-6 text-slate-700">
                               {docs.length > 1
-                                ? `Please review the following agreements generated for your application: ${agreementNames}. Click Review & Sign below to sign your agreements before final submission.`
-                                : `Please review the agreement generated for your application. Click Review & Sign below to sign your agreement before final submission.`}
+                                ? `Please review the following agreements generated for your application: ${agreementNames}. Click Review & Sign below to sign your agreements directly in your browser before final submission.`
+                                : `Please review the agreement generated for your application. Click Review & Sign below to sign your agreement directly in your browser before final submission.`}
                             </p>
                           </div>
-
-                          {!isSigned && !emailedTo && (
-                            <div className="mt-6">
-                              <p className="mb-3 text-sm font-extrabold text-navy">Choose how you want to sign the agreement</p>
-                              <div className="grid gap-4 sm:grid-cols-2">
-                                <button
-                                  type="button"
-                                  onClick={() => setSignMethodByApp((prev) => ({ ...prev, [appId]: 'electronic' }))}
-                                  className={`flex flex-col justify-between rounded-2xl border p-5 text-left transition ${currentSignMethod === 'electronic' ? 'border-primary bg-mist shadow-sm' : 'border-slate-200 hover:border-primary/50'}`}
-                                >
-                                  <div>
-                                    <div className="flex items-center justify-between gap-2">
-                                      <div className="flex items-center gap-3">
-                                        <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
-                                          <PencilLine size={20} />
-                                        </span>
-                                        <strong className="text-navy">Electronic Signature</strong>
-                                      </div>
-                                      <span className="rounded-full bg-primary/10 px-2.5 py-0.5 text-xs font-bold text-primary">Recommended</span>
-                                    </div>
-                                    <p className="mt-3 text-xs leading-5 text-slate-600">Sign the agreement directly in your browser using our secure e-signature pad.</p>
-                                  </div>
-                                  <ul className="mt-4 space-y-1.5 border-t border-slate-200/60 pt-3 text-xs font-semibold text-slate-700">
-                                    <li className="flex items-center gap-1.5"><Check size={14} className="text-primary" /> Fast and secure</li>
-                                    <li className="flex items-center gap-1.5"><Check size={14} className="text-primary" /> Legally binding e-sign</li>
-                                  </ul>
-                                </button>
-
-                                <button
-                                  type="button"
-                                  onClick={() => setSignMethodByApp((prev) => ({ ...prev, [appId]: 'email' }))}
-                                  className={`flex flex-col justify-between rounded-2xl border p-5 text-left transition ${currentSignMethod === 'email' ? 'border-primary bg-mist shadow-sm' : 'border-slate-200 hover:border-primary/50'}`}
-                                >
-                                  <div>
-                                    <div className="flex items-center gap-3">
-                                      <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-100 text-slate-700">
-                                        <Mail size={20} />
-                                      </span>
-                                      <strong className="text-navy">Email for Signature</strong>
-                                    </div>
-                                    <p className="mt-3 text-xs leading-5 text-slate-600">We will send the agreement documents to your email for signature review.</p>
-                                  </div>
-                                  <ul className="mt-4 space-y-1.5 border-t border-slate-200/60 pt-3 text-xs font-semibold text-slate-700">
-                                    <li className="flex items-center gap-1.5"><Check size={14} className="text-primary" /> Receive in inbox</li>
-                                    <li className="flex items-center gap-1.5"><Check size={14} className="text-primary" /> Sign at your convenience</li>
-                                  </ul>
-                                </button>
-                              </div>
-                            </div>
-                          )}
 
                           {/* Action Bar for Documents */}
                           <div className="mt-5 flex flex-wrap items-center justify-between gap-3 rounded-xl bg-slate-50 p-4">
@@ -1997,7 +2064,7 @@ export default function ApplicationFlow({ onComplete }) {
                               </span>
                             </div>
                             <div className="flex flex-wrap items-center gap-2">
-                              {!isSigned && currentSignMethod === 'electronic' && (
+                              {!isSigned && (
                                 <Button type="button" size="sm" onClick={() => handleOpenPdfModal(appId)}>
                                   <PencilLine size={15} /> Review & Sign
                                 </Button>
@@ -2062,7 +2129,7 @@ export default function ApplicationFlow({ onComplete }) {
         {/* Navigation Buttons */}
         <div className="mt-10 flex flex-col-reverse justify-between gap-3 border-t border-slate-200 pt-6 sm:flex-row">
           {step > 0 ? (
-            <Button type="button" variant="outline" onClick={back} disabled={loading || sendingEmail} className="w-full sm:w-auto">
+            <Button type="button" variant="outline" onClick={back} disabled={loading} className="w-full sm:w-auto">
               <ArrowLeft size={18} /> Back
             </Button>
           ) : <span />}
@@ -2070,12 +2137,12 @@ export default function ApplicationFlow({ onComplete }) {
           <Button
             type="button"
             onClick={next}
-            disabled={loading || loadingData || loadingAgreements || sendingEmail}
-            aria-busy={loading || sendingEmail}
+            disabled={loading || loadingData || loadingAgreements}
+            aria-busy={loading}
             className="w-full sm:w-auto"
           >
-            {loading || sendingEmail ? (
-              <><LoaderCircle className="animate-spin" size={18} /> {sendingEmail ? 'Sending...' : 'Saving...'}</>
+            {loading ? (
+              <><LoaderCircle className="animate-spin" size={18} /> Saving...</>
             ) : step === 8 ? (
               <>Submit Application <CheckCircle2 size={18} /></>
             ) : (
