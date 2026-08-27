@@ -510,11 +510,30 @@ function PdfReviewModal({
   onOpenSignModal,
   onSubmitFinal,
   isAllSigned,
+  applications = [],
+  checkedByApp = {},
+  onToggleChecked,
 }) {
+  const [modalError, setModalError] = useState('')
+
+  useEffect(() => {
+    setModalError('')
+  }, [isOpen, activeDocIndex])
+
   if (!isOpen) return null
 
   const activeDoc = documents[activeDocIndex] || null
   const currentUrl = viewingSummary && summaryUrl ? summaryUrl : activeDoc?.url
+
+  const handleSignClick = () => {
+    const uncheckedApp = applications.find((app) => !checkedByApp[app.applicationId])
+    if (uncheckedApp) {
+      setModalError(`Please agree to all terms and conditions for ${getServiceLabel(uncheckedApp.solution)} before signing.`)
+      return
+    }
+    setModalError('')
+    onOpenSignModal()
+  }
 
   return (
     <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-900/60 p-3 sm:p-6 backdrop-blur-sm">
@@ -586,18 +605,48 @@ function PdfReviewModal({
         </div>
 
         {/* Footer Actions */}
-        <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-t border-slate-200 bg-white px-5 py-4">
-          <div className="flex items-center gap-2">
+        <div className="flex shrink-0 flex-col gap-3 border-t border-slate-200 bg-white px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex min-w-0 flex-col gap-2">
             {activeDoc?.signed && !viewingSummary && (
-              <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-700">
-                <Check size={14} /> Signed
-              </span>
+              <div>
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-700">
+                  <Check size={14} /> Signed
+                </span>
+              </div>
+            )}
+            {!activeDoc?.signed && !viewingSummary && applications.length > 0 && (
+              <div className="flex flex-col gap-1.5">
+                {applications.map((application) => {
+                  const appId = application.applicationId
+                  const isChecked = Boolean(checkedByApp[appId])
+                  return (
+                    <label key={appId} className="flex cursor-pointer items-start gap-2 text-xs font-bold text-slate-700 sm:text-sm">
+                      <input
+                        type="checkbox"
+                        checked={isChecked}
+                        onChange={(e) => {
+                          const checked = e.target.checked
+                          onToggleChecked?.(appId, checked)
+                          if (checked) setModalError('')
+                        }}
+                        className="mt-0.5 h-4 w-4 shrink-0 rounded accent-primary"
+                      />
+                      <span className="line-clamp-2">
+                        I have read and agree to all terms and conditions for {getServiceLabel(application.solution)}.
+                      </span>
+                    </label>
+                  )
+                })}
+                {modalError && (
+                  <p className="text-xs font-bold text-rose-600">{modalError}</p>
+                )}
+              </div>
             )}
           </div>
 
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex shrink-0 flex-wrap items-center gap-2 sm:self-center">
             {!activeDoc?.signed && !viewingSummary ? (
-              <Button type="button" onClick={onOpenSignModal}>
+              <Button type="button" onClick={handleSignClick}>
                 <PencilLine size={16} /> Sign Agreement
               </Button>
             ) : (
@@ -613,7 +662,17 @@ function PdfReviewModal({
                   </Button>
                 )}
                 {isAllSigned && (
-                  <Button type="button" onClick={onSubmitFinal}>
+                  <Button
+                    type="button"
+                    onClick={() => {
+                      const uncheckedApp = applications.find((app) => !checkedByApp[app.applicationId])
+                      if (uncheckedApp) {
+                        setModalError(`Please agree to all terms and conditions before submitting.`)
+                        return
+                      }
+                      onSubmitFinal()
+                    }}
+                  >
                     Submit Application <CheckCircle2 size={16} />
                   </Button>
                 )}
@@ -1176,7 +1235,30 @@ export default function ApplicationFlow({ onComplete }) {
     setIsPdfModalOpen(true)
   }
 
+  const handleReviewAndSign = (applicationId, docIndex = 0) => {
+    const uncheckedApp = applications.find((app) => !checkedByApp[app.applicationId])
+    if (uncheckedApp) {
+      const msg = `Please agree to all terms and conditions for ${getServiceLabel(uncheckedApp.solution)} before reviewing and signing.`
+      setErrors((prev) => ({ ...prev, accepted: msg }))
+      setError(msg)
+      requestAnimationFrame(() => {
+        const uncheckedEl = document.querySelector('[data-terms-checkbox="true"]:not(:checked)')
+        if (uncheckedEl) {
+          uncheckedEl.scrollIntoView({ behavior: 'smooth', block: 'center' })
+          uncheckedEl.focus()
+        }
+      })
+      return
+    }
+    handleOpenPdfModal(applicationId, docIndex)
+  }
+
   const handleSignatureSubmit = async (signatureDataUrl) => {
+    const uncheckedApp = applications.find((app) => !checkedByApp[app.applicationId])
+    if (uncheckedApp) {
+      setError(`Please agree to the terms and conditions for ${getServiceLabel(uncheckedApp.solution)} before submitting signature.`)
+      return
+    }
     if (!activeAppId) return
     const docs = agreements[activeAppId] || []
     const activeDoc = docs[activeDocIndex] || null
@@ -1261,6 +1343,11 @@ export default function ApplicationFlow({ onComplete }) {
   }
 
   const submitFinalApplications = async () => {
+    const uncheckedApp = applications.find((app) => !checkedByApp[app.applicationId])
+    if (uncheckedApp) {
+      setError(`Please agree to the terms and conditions for ${getServiceLabel(uncheckedApp.solution)} before submitting.`)
+      return
+    }
     setLoading(true)
     setError('')
     try {
@@ -2065,7 +2152,7 @@ export default function ApplicationFlow({ onComplete }) {
                             </div>
                             <div className="flex flex-wrap items-center gap-2">
                               {!isSigned && (
-                                <Button type="button" size="sm" onClick={() => handleOpenPdfModal(appId)}>
+                                <Button type="button" size="sm" onClick={() => handleReviewAndSign(appId)}>
                                   <PencilLine size={15} /> Review & Sign
                                 </Button>
                               )}
@@ -2097,6 +2184,7 @@ export default function ApplicationFlow({ onComplete }) {
                       <label className="mt-6 flex cursor-pointer items-start gap-3 text-sm font-bold text-slate-700">
                         <input
                           type="checkbox"
+                          data-terms-checkbox="true"
                           checked={isChecked}
                           onChange={(e) => {
                             const checked = e.target.checked
@@ -2167,14 +2255,33 @@ export default function ApplicationFlow({ onComplete }) {
         onToggleSummary={() => setViewingSummary(!viewingSummary)}
         onDownloadSummary={() => activeAppId && downloadAgreementSummary(activeAppId)}
         onOpenSignModal={() => {
+          const uncheckedApp = applications.find((app) => !checkedByApp[app.applicationId])
+          if (uncheckedApp) {
+            setError(`Please agree to all terms and conditions for ${getServiceLabel(uncheckedApp.solution)} before signing.`)
+            return
+          }
           setIsPdfModalOpen(false)
           setShowSignatureModal(true)
         }}
         onSubmitFinal={() => {
+          const uncheckedApp = applications.find((app) => !checkedByApp[app.applicationId])
+          if (uncheckedApp) {
+            setError(`Please agree to all terms and conditions before submitting.`)
+            return
+          }
           setIsPdfModalOpen(false)
           submitFinalApplications()
         }}
         isAllSigned={activeIsAllSigned}
+        applications={applications}
+        checkedByApp={checkedByApp}
+        onToggleChecked={(appId, checked) => {
+          setCheckedByApp((prev) => ({ ...prev, [appId]: checked }))
+          if (checked) {
+            setErrors((prev) => ({ ...prev, accepted: '' }))
+            setError('')
+          }
+        }}
       />
 
       {/* Signature Canvas / Typed Signature Modal */}
