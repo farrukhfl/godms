@@ -1,6 +1,7 @@
 import { clearCustomerToken, getCustomerAccessToken, getCustomerAgentId } from '../../utils/customerToken'
 
-const baseUrl = (import.meta.env.VITE_DRMS_API_BASE_URL || 'https://dev-derps.gotmsolutions.com/api').replace(/\/$/, '')
+const primaryUrl = (import.meta.env.VITE_DRMS_API_BASE_URL || 'https://pos.gotmsolutions.com/api').replace(/\/$/, '')
+const fallbackUrl = 'https://pos.gotmsolutions.com/api'
 
 async function parseResponse(response) {
   const contentType = response.headers.get('content-type') || ''
@@ -23,7 +24,8 @@ async function parseResponse(response) {
 }
 
 export async function applicationRequest(path, options = {}) {
-  const request = async (token) => fetch(`${baseUrl}/${String(path).replace(/^\//, '')}`, {
+  const cleanPath = String(path).replace(/^\//, '')
+  const send = (targetBase, token) => fetch(`${targetBase}/${cleanPath}`, {
     method: options.method || 'GET',
     headers: {
       ...(options.body instanceof FormData ? {} : { 'Content-Type': 'application/json' }),
@@ -35,14 +37,28 @@ export async function applicationRequest(path, options = {}) {
 
   let response
   try {
-    response = await request(await getCustomerAccessToken())
+    let token = await getCustomerAccessToken()
+    response = await send(primaryUrl, token)
     if (response.status === 401) {
       clearCustomerToken()
-      response = await request(await getCustomerAccessToken({ force: true }))
+      token = await getCustomerAccessToken({ force: true })
+      response = await send(primaryUrl, token)
+    } else if (response.status >= 500 && primaryUrl !== fallbackUrl) {
+      response = await send(fallbackUrl, token)
     }
   } catch (error) {
     if (error?.name === 'AbortError') throw error
-    throw new Error('Unable to connect to the application service. Please try again shortly.')
+    if (primaryUrl !== fallbackUrl) {
+      try {
+        const token = await getCustomerAccessToken()
+        response = await send(fallbackUrl, token)
+      } catch {
+        response = null
+      }
+    }
+    if (!response) {
+      throw new Error('Unable to connect to the application service. Please try again shortly.')
+    }
   }
 
   return parseResponse(response)
@@ -111,7 +127,8 @@ export async function fetchAgreementSummary(applicationId) {
 
 export async function downloadAgreementSummary(applicationId) {
   const token = await getCustomerAccessToken()
-  const response = await fetch(`${baseUrl}/application/${applicationId}/agreement-documents/summary?download=true`, {
+  const targetUrl = (primaryUrl !== fallbackUrl ? primaryUrl : fallbackUrl)
+  const response = await fetch(`${targetUrl}/application/${applicationId}/agreement-documents/summary?download=true`, {
     headers: { Authorization: `Bearer ${token}` },
   })
 
@@ -141,4 +158,11 @@ export async function downloadAgreementSummary(applicationId) {
   link.click()
   link.remove()
   URL.revokeObjectURL(blobUrl)
+}
+
+export async function placeOrder(orderPayload) {
+  return applicationRequest('placed-order', {
+    method: 'POST',
+    body: orderPayload,
+  })
 }

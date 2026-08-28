@@ -14,6 +14,7 @@ import LegalPage from './pages/LegalPage'
 import OpenAccountPage from './pages/OpenAccountPage'
 import PartnerProgramPage from './pages/PartnerProgramPage'
 import PlaceholderPage from './pages/PlaceholderPage'
+import ProductDetailPage from './pages/ProductDetailPage'
 import ReferralPartnerPage from './pages/ReferralPartnerPage'
 import SignInPage from './pages/SignInPage'
 
@@ -31,6 +32,7 @@ const categoryRoutes = [
         title={label}
         type={type}
         icon={icon}
+        categoryPath={path}
         description={content.description || description || `Explore dependable ${label.toLowerCase()} options selected around your business and payment environment.`}
         {...content}
       />
@@ -53,6 +55,21 @@ const router = createBrowserRouter([
       { path: '/referral-partner', element: <ReferralPartnerPage /> },
       { path: '/sign-in', element: <SignInPage /> },
       { path: '/terms-of-use', element: <LegalPage title="Terms of Use" description={`Terms governing access to the ${siteConfig.company.fullName} website and its informational content.`} sections={termsSections} /> },
+      {
+        path: '/store',
+        element: (
+          <CategoryPageTemplate
+            title="POS Store"
+            type="POS store category"
+            categoryPath="all"
+            heroTitle="Complete POS Hardware & Payment Terminals"
+            description="Explore our complete commercial catalog of point-of-sale systems, wireless payment terminals, barcode scanners, receipt printers, and accessories."
+            products={[]}
+          />
+        ),
+      },
+      { path: '/store/product/:id', element: <ProductDetailPage /> },
+      { path: '/product/:id', element: <ProductDetailPage /> },
       ...categoryRoutes,
       { path: '*', element: <PlaceholderPage title="Page not found" description="The page you requested may have moved or is not available yet." /> },
     ],

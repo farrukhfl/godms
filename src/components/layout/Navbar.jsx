@@ -22,7 +22,10 @@ export default function Navbar() {
   }, [location.pathname])
 
   useEffect(() => {
-    const handleScroll = () => setIsScrolled(window.scrollY > 24)
+    const handleScroll = () => {
+      const scrolled = window.scrollY > 20
+      setIsScrolled((prev) => (prev !== scrolled ? scrolled : prev))
+    }
     handleScroll()
     window.addEventListener('scroll', handleScroll, { passive: true })
     return () => window.removeEventListener('scroll', handleScroll)
@@ -41,18 +44,19 @@ export default function Navbar() {
   }
 
   return (
-    <header className={`header-shell sticky top-0 z-50 bg-white/95 backdrop-blur transition-all duration-300 ${isScrolled ? 'shadow-lg shadow-navy/10' : 'shadow-sm'}`}>
-      <div className={`overflow-hidden bg-primary-dark text-white transition-all duration-300 ${isScrolled ? 'max-h-0 opacity-0' : 'max-h-12 opacity-100'}`}>
+    <>
+      <div className="bg-primary-dark text-white">
         <div className="mx-auto flex max-w-7xl items-center justify-center gap-5 px-4 py-2 text-xs font-medium sm:justify-end sm:px-6 lg:px-8">
           <a href={siteConfig.phone.href} className="flex items-center gap-1.5 transition hover:text-blue-200"><Phone aria-hidden="true" size={13} /> {siteConfig.phone.display}</a>
           <a href={`mailto:${siteConfig.email}`} className="hidden min-w-0 items-center gap-1.5 transition hover:text-blue-200 md:flex"><Mail aria-hidden="true" className="shrink-0" size={13} /> <span className="break-all">{siteConfig.email}</span></a>
         </div>
       </div>
 
-      <div className={`mx-auto flex max-w-7xl items-center justify-between px-4 transition-all duration-300 sm:px-6 lg:px-8 ${isScrolled ? 'h-16' : 'h-20'}`}>
-        <Link to="/" className="flex shrink-0 items-center" aria-label={`${siteConfig.company.fullName} home`}>
-          <img src={siteConfig.company.logoUrl} alt={siteConfig.company.fullName} width="1120" height="314" className={`header-logo h-auto object-contain transition-all duration-300 ${isScrolled ? 'w-36 sm:w-40' : 'w-40 sm:w-48'}`} />
-        </Link>
+      <header className={`header-shell sticky top-0 z-50 bg-white/95 backdrop-blur transition-shadow duration-300 ${isScrolled ? 'shadow-lg shadow-navy/10' : 'shadow-sm'}`}>
+        <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:h-20 sm:px-6 lg:px-8">
+          <Link to="/" className="flex shrink-0 items-center" aria-label={`${siteConfig.company.fullName} home`}>
+            <img src={siteConfig.company.logoUrl} alt={siteConfig.company.fullName} width="1120" height="314" className="header-logo h-auto w-36 object-contain sm:w-48" />
+          </Link>
 
         <nav className="hidden items-center gap-1 xl:flex" aria-label="Main navigation">
           <Link to="/" className="nav-link rounded-lg px-3 py-2 text-sm font-semibold text-navy transition hover:bg-mist hover:text-primary">Home</Link>
@@ -104,5 +108,6 @@ export default function Navbar() {
       </div>
       {mobileOpen && <MobileMenu onClose={() => setMobileOpen(false)} signedIn={signedIn} onSignOut={handleSignOut} />}
     </header>
-  )
+  </>
+)
 }

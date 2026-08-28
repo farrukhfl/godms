@@ -16,7 +16,7 @@ const fallbackBody = [
 
 const fallbackBenefits = ['Equipment selected for your payment environment', 'Compatibility guidance before purchase', 'Options for growing and established businesses', 'Support from payment technology specialists']
 
-export default function CategoryPageTemplate({ title, heroTitle, description, type, icon: Icon, body = fallbackBody, benefits = fallbackBenefits, metaDescription, products, heroImage, heroImageAlt, showPricingDisclosure = false, stats, featureSections, audience, faqs, faqTitle, faqDescription, showIndustryPosOffer = false }) {
+export default function CategoryPageTemplate({ title, heroTitle, description, type, icon: Icon, body = fallbackBody, benefits = fallbackBenefits, metaDescription, products, categoryPath, heroImage, heroImageAlt, showPricingDisclosure = false, stats, featureSections, audience, faqs, faqTitle, faqDescription, showIndustryPosOffer = false }) {
   const hasIndustryContent = featureSections?.length > 0
   const isIndustryPage = type === 'Industry solution'
   const isSolutionPage = type === 'Payment solution'
@@ -76,7 +76,7 @@ export default function CategoryPageTemplate({ title, heroTitle, description, ty
               <Button to="/open-an-account" className="mt-8 w-full">Open an account <ArrowRight aria-hidden="true" size={18} /></Button>
             </aside>}
           </div>
-          {products && <ProductGrid products={products} />}
+          {products && <ProductGrid products={products} categoryPath={categoryPath} categoryTitle={title} />}
         </div>
       </section>}
 
