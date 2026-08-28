@@ -12,7 +12,7 @@ export const siteConfig = {
     shortName: 'Dolphin',
     legalName: 'Dolphin Merchant Services LLC',
     posName: 'Dolphin POS',
-    logoUrl: '/logo.png',
+    logoUrl: '/new-logo.png',
   },
   phone: {
     label: 'Call Us',

@@ -56,7 +56,7 @@ export default function Navbar() {
         <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:h-20 sm:px-6 lg:px-8">
           <Link to="/" className="flex shrink-0 items-center" aria-label={`${siteConfig.company.fullName} home`}>
             <img
-              src={siteConfig.company.logoUrl || '/logo.png'}
+              src={siteConfig.company.logoUrl || '/new-logo.png'}
               alt={siteConfig.company.fullName}
               onError={(e) => {
                 e.currentTarget.src = '/logo.png'

@@ -46,7 +46,7 @@ export default function Footer() {
         <Reveal direction="left" className="relative md:col-span-2">
           <Link to="/" className="footer-logo inline-flex rounded-2xl bg-white px-4 py-3 shadow-lg transition duration-300" aria-label={`${siteConfig.company.fullName} home`}>
             <img
-              src={siteConfig.company.logoUrl || '/logo.png'}
+              src={siteConfig.company.logoUrl || '/new-logo.png'}
               alt={siteConfig.company.fullName}
               onError={(e) => {
                 e.currentTarget.src = '/logo.png'
