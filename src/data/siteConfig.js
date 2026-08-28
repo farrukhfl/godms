@@ -12,7 +12,7 @@ export const siteConfig = {
     shortName: 'Dolphin',
     legalName: 'Dolphin Merchant Services LLC',
     posName: 'Dolphin POS',
-    logoUrl: 'https://godms.com/wp-content/uploads/2025/10/DMS-Logo-nobg-scaled-1-scaled.png',
+    logoUrl: '/logo.png',
   },
   phone: {
     label: 'Call Us',

@@ -55,7 +55,16 @@ export default function Navbar() {
       <header className={`header-shell sticky top-0 z-50 bg-white/95 backdrop-blur transition-shadow duration-300 ${isScrolled ? 'shadow-lg shadow-navy/10' : 'shadow-sm'}`}>
         <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:h-20 sm:px-6 lg:px-8">
           <Link to="/" className="flex shrink-0 items-center" aria-label={`${siteConfig.company.fullName} home`}>
-            <img src={siteConfig.company.logoUrl} alt={siteConfig.company.fullName} width="1120" height="314" className="header-logo h-auto w-36 object-contain sm:w-48" />
+            <img
+              src={siteConfig.company.logoUrl || '/logo.png'}
+              alt={siteConfig.company.fullName}
+              onError={(e) => {
+                e.currentTarget.src = '/logo.png'
+              }}
+              width="1120"
+              height="314"
+              className="header-logo h-auto w-36 object-contain sm:w-48"
+            />
           </Link>
 
         <nav className="hidden items-center gap-1 xl:flex" aria-label="Main navigation">
