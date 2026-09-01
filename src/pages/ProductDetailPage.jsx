@@ -55,7 +55,7 @@ function phoneFormat(value) {
 function formatCardNumber(value) {
   return String(value || '')
     .replace(/\D/g, '')
-    .slice(0, 19)
+    .slice(0, 16)
     .replace(/(.{4})/g, '$1 ')
     .trim()
 }
@@ -186,10 +186,10 @@ function CheckoutModal({ product, quantity, isOpen, onClose }) {
     }
 
     // Payment validation
-    const cleanCard = digits(payment.cardNumber, 20)
+    const cleanCard = digits(payment.cardNumber, 16)
     required('cardNumber', cleanCard, 'Card number is required.')
-    if (cleanCard && !isValidLuhn(cleanCard)) {
-      nextErrors.cardNumber = 'Enter a valid credit card number.'
+    if (cleanCard && (cleanCard.length < 15 || cleanCard.length > 16 || !isValidLuhn(cleanCard))) {
+      nextErrors.cardNumber = 'Enter a valid 16-digit credit card number.'
     }
 
     required('expirationDate', payment.expirationDate, 'Expiry date is required.')
@@ -363,84 +363,97 @@ function CheckoutModal({ product, quantity, isOpen, onClose }) {
                       Customer & Shipping Details
                     </h4>
 
-                    <div className="mt-4 grid gap-4 sm:grid-cols-2">
-                      <FormField id="firstName" label="First Name" required error={errors.firstName}>
-                        <input
-                          id="firstName"
-                          value={customer.firstName}
-                          onChange={(e) => handleCustomerChange('firstName', e.target.value)}
-                          className={`${formControlClasses} ${errors.firstName ? 'border-rose-500' : ''}`}
-                        />
-                      </FormField>
-                      <FormField id="lastName" label="Last Name" required error={errors.lastName}>
-                        <input
-                          id="lastName"
-                          value={customer.lastName}
-                          onChange={(e) => handleCustomerChange('lastName', e.target.value)}
-                          className={`${formControlClasses} ${errors.lastName ? 'border-rose-500' : ''}`}
-                        />
-                      </FormField>
-                      <FormField id="email" label="Email Address" required error={errors.email}>
-                        <input
-                          id="email"
-                          type="email"
-                          value={customer.email}
-                          onChange={(e) => handleCustomerChange('email', e.target.value)}
-                          placeholder="name@company.com"
-                          className={`${formControlClasses} ${errors.email ? 'border-rose-500' : ''}`}
-                        />
-                      </FormField>
-                      <FormField id="phone" label="Phone Number" required error={errors.phone}>
-                        <input
-                          id="phone"
-                          value={customer.phone}
-                          onChange={(e) => handleCustomerChange('phone', phoneFormat(e.target.value))}
-                          placeholder="(555) 000-0000"
-                          className={`${formControlClasses} ${errors.phone ? 'border-rose-500' : ''}`}
-                        />
-                      </FormField>
-                      <div className="sm:col-span-2">
-                        <FormField id="street" label="Street Address" required error={errors.street}>
+                    <div className="mt-4 space-y-4">
+                      <div className="grid grid-cols-2 gap-4">
+                        <FormField id="firstName" label="First Name" required error={errors.firstName}>
                           <input
-                            id="street"
-                            value={customer.street}
-                            onChange={(e) => handleCustomerChange('street', e.target.value)}
-                            placeholder="123 Business St, Suite 100"
-                            className={`${formControlClasses} ${errors.street ? 'border-rose-500' : ''}`}
+                            id="firstName"
+                            value={customer.firstName}
+                            onChange={(e) => handleCustomerChange('firstName', e.target.value)}
+                            className={`${formControlClasses} ${errors.firstName ? 'border-rose-500' : ''}`}
+                          />
+                        </FormField>
+                        <FormField id="lastName" label="Last Name" required error={errors.lastName}>
+                          <input
+                            id="lastName"
+                            value={customer.lastName}
+                            onChange={(e) => handleCustomerChange('lastName', e.target.value)}
+                            className={`${formControlClasses} ${errors.lastName ? 'border-rose-500' : ''}`}
                           />
                         </FormField>
                       </div>
-                      <FormField id="city" label="City" required error={errors.city}>
+
+                      <div className="grid grid-cols-2 gap-4">
+                        <FormField id="email" label="Email Address" required error={errors.email}>
+                          <input
+                            id="email"
+                            type="email"
+                            value={customer.email}
+                            onChange={(e) => handleCustomerChange('email', e.target.value)}
+                            placeholder="name@company.com"
+                            className={`${formControlClasses} ${errors.email ? 'border-rose-500' : ''}`}
+                          />
+                        </FormField>
+                        <FormField id="phone" label="Phone Number" required error={errors.phone}>
+                          <input
+                            id="phone"
+                            value={customer.phone}
+                            onChange={(e) => handleCustomerChange('phone', phoneFormat(e.target.value))}
+                            placeholder="(555) 000-0000"
+                            className={`${formControlClasses} ${errors.phone ? 'border-rose-500' : ''}`}
+                          />
+                        </FormField>
+                      </div>
+
+                      <FormField id="street" label="Street Address" required error={errors.street}>
                         <input
-                          id="city"
-                          value={customer.city}
-                          onChange={(e) => handleCustomerChange('city', e.target.value)}
-                          className={`${formControlClasses} ${errors.city ? 'border-rose-500' : ''}`}
+                          id="street"
+                          value={customer.street}
+                          onChange={(e) => handleCustomerChange('street', e.target.value)}
+                          placeholder="123 Business St, Suite 100"
+                          className={`${formControlClasses} ${errors.street ? 'border-rose-500' : ''}`}
                         />
                       </FormField>
-                      <FormField id="state" label="State" required error={errors.state}>
-                        <select
-                          id="state"
-                          value={customer.state}
-                          onChange={(e) => handleCustomerChange('state', e.target.value)}
-                          className={`${formControlClasses} ${errors.state ? 'border-rose-500' : ''}`}
-                        >
-                          <option value="">Select State</option>
-                          {states.map((s) => (
-                            <option key={s} value={s}>{s}</option>
-                          ))}
-                        </select>
-                      </FormField>
-                      <FormField id="zip" label="ZIP Code" required error={errors.zip}>
-                        <input
-                          id="zip"
-                          value={customer.zip}
-                          onChange={(e) => handleCustomerChange('zip', digits(e.target.value, 5))}
-                          placeholder="78701"
-                          maxLength={5}
-                          className={`${formControlClasses} ${errors.zip ? 'border-rose-500' : ''}`}
-                        />
-                      </FormField>
+
+                      <div className="grid grid-cols-3 gap-3">
+                        <div className="col-span-1">
+                          <FormField id="city" label="City" required error={errors.city}>
+                            <input
+                              id="city"
+                              value={customer.city}
+                              onChange={(e) => handleCustomerChange('city', e.target.value)}
+                              className={`${formControlClasses} ${errors.city ? 'border-rose-500' : ''}`}
+                            />
+                          </FormField>
+                        </div>
+                        <div className="col-span-1">
+                          <FormField id="state" label="State" required error={errors.state}>
+                            <select
+                              id="state"
+                              value={customer.state}
+                              onChange={(e) => handleCustomerChange('state', e.target.value)}
+                              className={`${formControlClasses} ${errors.state ? 'border-rose-500' : ''}`}
+                            >
+                              <option value="">State</option>
+                              {states.map((s) => (
+                                <option key={s} value={s}>{s}</option>
+                              ))}
+                            </select>
+                          </FormField>
+                        </div>
+                        <div className="col-span-1">
+                          <FormField id="zip" label="ZIP Code" required error={errors.zip}>
+                            <input
+                              id="zip"
+                              value={customer.zip}
+                              onChange={(e) => handleCustomerChange('zip', digits(e.target.value, 5))}
+                              placeholder="78701"
+                              maxLength={5}
+                              className={`${formControlClasses} ${errors.zip ? 'border-rose-500' : ''}`}
+                            />
+                          </FormField>
+                        </div>
+                      </div>
                     </div>
 
                     <label className="mt-4 flex cursor-pointer items-center gap-2 text-xs font-bold text-slate-700">
@@ -462,65 +475,75 @@ function CheckoutModal({ product, quantity, isOpen, onClose }) {
                           </h5>
                         </div>
 
-                        <div className="grid gap-4 sm:grid-cols-2">
-                          <FormField id="shipping_firstName" label="Recipient First Name" required error={errors.shipping_firstName}>
-                            <input
-                              id="shipping_firstName"
-                              value={shipping.firstName}
-                              onChange={(e) => handleShippingChange('firstName', e.target.value)}
-                              className={`${formControlClasses} ${errors.shipping_firstName ? 'border-rose-500' : ''}`}
-                            />
-                          </FormField>
-                          <FormField id="shipping_lastName" label="Recipient Last Name" required error={errors.shipping_lastName}>
-                            <input
-                              id="shipping_lastName"
-                              value={shipping.lastName}
-                              onChange={(e) => handleShippingChange('lastName', e.target.value)}
-                              className={`${formControlClasses} ${errors.shipping_lastName ? 'border-rose-500' : ''}`}
-                            />
-                          </FormField>
-                          <div className="sm:col-span-2">
-                            <FormField id="shipping_street" label="Shipping Street Address" required error={errors.shipping_street}>
+                        <div className="space-y-4">
+                          <div className="grid grid-cols-2 gap-4">
+                            <FormField id="shipping_firstName" label="Recipient First Name" required error={errors.shipping_firstName}>
                               <input
-                                id="shipping_street"
-                                value={shipping.street}
-                                onChange={(e) => handleShippingChange('street', e.target.value)}
-                                placeholder="456 Destination Ave, Suite 200"
-                                className={`${formControlClasses} ${errors.shipping_street ? 'border-rose-500' : ''}`}
+                                id="shipping_firstName"
+                                value={shipping.firstName}
+                                onChange={(e) => handleShippingChange('firstName', e.target.value)}
+                                className={`${formControlClasses} ${errors.shipping_firstName ? 'border-rose-500' : ''}`}
+                              />
+                            </FormField>
+                            <FormField id="shipping_lastName" label="Recipient Last Name" required error={errors.shipping_lastName}>
+                              <input
+                                id="shipping_lastName"
+                                value={shipping.lastName}
+                                onChange={(e) => handleShippingChange('lastName', e.target.value)}
+                                className={`${formControlClasses} ${errors.shipping_lastName ? 'border-rose-500' : ''}`}
                               />
                             </FormField>
                           </div>
-                          <FormField id="shipping_city" label="City" required error={errors.shipping_city}>
+
+                          <FormField id="shipping_street" label="Shipping Street Address" required error={errors.shipping_street}>
                             <input
-                              id="shipping_city"
-                              value={shipping.city}
-                              onChange={(e) => handleShippingChange('city', e.target.value)}
-                              className={`${formControlClasses} ${errors.shipping_city ? 'border-rose-500' : ''}`}
+                              id="shipping_street"
+                              value={shipping.street}
+                              onChange={(e) => handleShippingChange('street', e.target.value)}
+                              placeholder="456 Destination Ave, Suite 200"
+                              className={`${formControlClasses} ${errors.shipping_street ? 'border-rose-500' : ''}`}
                             />
                           </FormField>
-                          <FormField id="shipping_state" label="State" required error={errors.shipping_state}>
-                            <select
-                              id="shipping_state"
-                              value={shipping.state}
-                              onChange={(e) => handleShippingChange('state', e.target.value)}
-                              className={`${formControlClasses} ${errors.shipping_state ? 'border-rose-500' : ''}`}
-                            >
-                              <option value="">Select State</option>
-                              {states.map((s) => (
-                                <option key={s} value={s}>{s}</option>
-                              ))}
-                            </select>
-                          </FormField>
-                          <FormField id="shipping_zip" label="ZIP Code" required error={errors.shipping_zip}>
-                            <input
-                              id="shipping_zip"
-                              value={shipping.zip}
-                              onChange={(e) => handleShippingChange('zip', digits(e.target.value, 5))}
-                              placeholder="75001"
-                              maxLength={5}
-                              className={`${formControlClasses} ${errors.shipping_zip ? 'border-rose-500' : ''}`}
-                            />
-                          </FormField>
+
+                          <div className="grid grid-cols-3 gap-3">
+                            <div className="col-span-1">
+                              <FormField id="shipping_city" label="City" required error={errors.shipping_city}>
+                                <input
+                                  id="shipping_city"
+                                  value={shipping.city}
+                                  onChange={(e) => handleShippingChange('city', e.target.value)}
+                                  className={`${formControlClasses} ${errors.shipping_city ? 'border-rose-500' : ''}`}
+                                />
+                              </FormField>
+                            </div>
+                            <div className="col-span-1">
+                              <FormField id="shipping_state" label="State" required error={errors.shipping_state}>
+                                <select
+                                  id="shipping_state"
+                                  value={shipping.state}
+                                  onChange={(e) => handleShippingChange('state', e.target.value)}
+                                  className={`${formControlClasses} ${errors.shipping_state ? 'border-rose-500' : ''}`}
+                                >
+                                  <option value="">State</option>
+                                  {states.map((s) => (
+                                    <option key={s} value={s}>{s}</option>
+                                  ))}
+                                </select>
+                              </FormField>
+                            </div>
+                            <div className="col-span-1">
+                              <FormField id="shipping_zip" label="ZIP Code" required error={errors.shipping_zip}>
+                                <input
+                                  id="shipping_zip"
+                                  value={shipping.zip}
+                                  onChange={(e) => handleShippingChange('zip', digits(e.target.value, 5))}
+                                  placeholder="75001"
+                                  maxLength={5}
+                                  className={`${formControlClasses} ${errors.shipping_zip ? 'border-rose-500' : ''}`}
+                                />
+                              </FormField>
+                            </div>
+                          </div>
                         </div>
                       </div>
                     )}
@@ -533,43 +556,61 @@ function CheckoutModal({ product, quantity, isOpen, onClose }) {
                       Payment Details
                     </h4>
 
-                    <div className="mt-4 grid gap-4 sm:grid-cols-2">
-                      <div className="sm:col-span-2">
-                        <FormField id="cardNumber" label="Credit / Debit Card Number" required error={errors.cardNumber}>
-                          <div className="relative">
-                            <input
-                              id="cardNumber"
-                              value={payment.cardNumber}
-                              onChange={(e) => handlePaymentChange('cardNumber', formatCardNumber(e.target.value))}
-                              placeholder="4111 1111 1111 1111"
-                              maxLength={23}
-                              className={`${formControlClasses} pr-10 font-mono ${errors.cardNumber ? 'border-rose-500' : ''}`}
-                            />
-                            <CreditCard size={18} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                          </div>
-                        </FormField>
+                    <div className="mt-4 space-y-4">
+                      <FormField id="cardNumber" label="Credit / Debit Card Number" required error={errors.cardNumber}>
+                        <div className="relative">
+                          <input
+                            id="cardNumber"
+                            value={payment.cardNumber}
+                            onChange={(e) => handlePaymentChange('cardNumber', formatCardNumber(e.target.value))}
+                            placeholder="4111 1111 1111 1111"
+                            maxLength={19}
+                            className={`${formControlClasses} pr-10 font-mono ${errors.cardNumber ? 'border-rose-500' : ''}`}
+                          />
+                          <CreditCard size={18} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                        </div>
+                      </FormField>
+
+                      {/* Expiration Date and CVV side-by-side in one line */}
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="min-w-0">
+                          <label htmlFor="expirationDate" className="block text-xs sm:text-sm font-bold text-navy truncate">
+                            Expiration (MM/YY)<span className="ml-1 text-primary">*</span>
+                          </label>
+                          <input
+                            id="expirationDate"
+                            value={payment.expirationDate}
+                            onChange={(e) => handlePaymentChange('expirationDate', formatExpiryInput(e.target.value))}
+                            placeholder="12/30"
+                            maxLength={5}
+                            className={`${formControlClasses} font-mono ${errors.expirationDate ? 'border-rose-500' : ''}`}
+                          />
+                          {errors.expirationDate && (
+                            <p id="expirationDate-error" className="mt-1.5 break-words text-xs font-semibold text-rose-600">
+                              {errors.expirationDate}
+                            </p>
+                          )}
+                        </div>
+                        <div className="min-w-0">
+                          <label htmlFor="cardCode" className="block text-xs sm:text-sm font-bold text-navy truncate">
+                            Card Code (CVV)<span className="ml-1 text-primary">*</span>
+                          </label>
+                          <input
+                            id="cardCode"
+                            type="password"
+                            value={payment.cardCode}
+                            onChange={(e) => handlePaymentChange('cardCode', digits(e.target.value, 4))}
+                            placeholder="123"
+                            maxLength={4}
+                            className={`${formControlClasses} font-mono ${errors.cardCode ? 'border-rose-500' : ''}`}
+                          />
+                          {errors.cardCode && (
+                            <p id="cardCode-error" className="mt-1.5 break-words text-xs font-semibold text-rose-600">
+                              {errors.cardCode}
+                            </p>
+                          )}
+                        </div>
                       </div>
-                      <FormField id="expirationDate" label="Expiration Date (MM/YY)" required error={errors.expirationDate}>
-                        <input
-                          id="expirationDate"
-                          value={payment.expirationDate}
-                          onChange={(e) => handlePaymentChange('expirationDate', formatExpiryInput(e.target.value))}
-                          placeholder="12/30"
-                          maxLength={5}
-                          className={`${formControlClasses} font-mono ${errors.expirationDate ? 'border-rose-500' : ''}`}
-                        />
-                      </FormField>
-                      <FormField id="cardCode" label="Card Code (CVV)" required error={errors.cardCode}>
-                        <input
-                          id="cardCode"
-                          type="password"
-                          value={payment.cardCode}
-                          onChange={(e) => handlePaymentChange('cardCode', digits(e.target.value, 4))}
-                          placeholder="123"
-                          maxLength={4}
-                          className={`${formControlClasses} font-mono ${errors.cardCode ? 'border-rose-500' : ''}`}
-                        />
-                      </FormField>
                     </div>
                   </div>
                 </div>

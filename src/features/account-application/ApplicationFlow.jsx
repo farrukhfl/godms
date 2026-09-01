@@ -136,7 +136,7 @@ function apiDate(value) {
 function formatCardNumber(value) {
   return String(value || '')
     .replace(/\D/g, '')
-    .slice(0, 19)
+    .slice(0, 16)
     .replace(/(.{4})/g, '$1 ')
     .trim()
 }
@@ -2054,22 +2054,24 @@ export default function ApplicationFlow({ onComplete }) {
                                   Amount to pay now: <span className="text-primary">${inStockAmount.toFixed(2)}</span> (in-stock items only)
                                 </p>
                               </div>
-                              <div className="grid gap-5 sm:grid-cols-2">
-                                <Field id={`nameOnCard-${application.applicationId}`} label="Name on Card" required value={form.nameOnCard} onChange={(event) => setShipment(application.applicationId, 'nameOnCard', event.target.value)} />
-                                <Field id={`cardNumber-${application.applicationId}`} label="Card Number" required value={form.cardNumber} onChange={(event) => setShipment(application.applicationId, 'cardNumber', formatCardNumber(event.target.value))} placeholder="XXXX XXXX XXXX XXXX" maxLength={23} />
-                                <Field
-                                  id={`expiryDate-${application.applicationId}`}
-                                  label="Expiry Date (MM/YY)"
-                                  required
-                                  value={form.expiryDate}
-                                  onChange={(event) => setShipment(application.applicationId, 'expiryDate', formatExpiryInput(event.target.value))}
-                                  placeholder="MM/YY"
-                                  maxLength={7}
-                                />
-                                <Field id={`cvv-${application.applicationId}`} label="CVV" required type="password" value={form.cvv} onChange={(event) => setShipment(application.applicationId, 'cvv', digits(event.target.value, 4))} maxLength={4} />
-                                <div className="sm:col-span-2">
-                                  <Field id={`cardBillingAddress-${application.applicationId}`} label="Billing Address" required value={form.billingAddress} onChange={(event) => setShipment(application.applicationId, 'billingAddress', event.target.value)} />
+                              <div className="space-y-4">
+                                <div className="grid gap-4 sm:grid-cols-2">
+                                  <Field id={`nameOnCard-${application.applicationId}`} label="Name on Card" required value={form.nameOnCard} onChange={(event) => setShipment(application.applicationId, 'nameOnCard', event.target.value)} />
+                                  <Field id={`cardNumber-${application.applicationId}`} label="Card Number" required value={form.cardNumber} onChange={(event) => setShipment(application.applicationId, 'cardNumber', formatCardNumber(event.target.value))} placeholder="XXXX XXXX XXXX XXXX" maxLength={19} />
                                 </div>
+                                <div className="grid grid-cols-2 gap-3 sm:gap-4">
+                                  <Field
+                                    id={`expiryDate-${application.applicationId}`}
+                                    label="Expiration (MM/YY)"
+                                    required
+                                    value={form.expiryDate}
+                                    onChange={(event) => setShipment(application.applicationId, 'expiryDate', formatExpiryInput(event.target.value))}
+                                    placeholder="MM/YY"
+                                    maxLength={5}
+                                  />
+                                  <Field id={`cvv-${application.applicationId}`} label="Card Code (CVV)" required type="password" value={form.cvv} onChange={(event) => setShipment(application.applicationId, 'cvv', digits(event.target.value, 4))} maxLength={4} />
+                                </div>
+                                <Field id={`cardBillingAddress-${application.applicationId}`} label="Billing Address" required value={form.billingAddress} onChange={(event) => setShipment(application.applicationId, 'billingAddress', event.target.value)} />
                               </div>
                             </div>
                           )}
