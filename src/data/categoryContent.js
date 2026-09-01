@@ -55,6 +55,8 @@ export const categoryContent = {
     faqTitle: 'Card processing and dual pricing, clearly explained',
     faqDescription: 'Understand the path from authorization to deposit and how transparent price choice protects your margin.',
     metaDescription: `Protect margins with ${siteConfig.company.fullName} dual-pricing credit and debit card processing, next-day funding, fraud tools, and omnichannel acceptance.`,
+    heroImage: '/solution-images/credit-card-processing.png',
+    heroImageAlt: 'Dolphin dual-pricing credit card processing with smart terminal and fast settlement',
   },
   '/solutions/pos': {
     heroTitle: 'A POS that earns its place on your counter',
@@ -119,6 +121,8 @@ export const categoryContent = {
     faqDescription: 'Compare card readers, connected commerce, offline operation, dual pricing, and the migration process.',
     metaDescription: `Run in-store and online sales with ${siteConfig.company.posName}, featuring native dual pricing, optional apps, synchronized inventory, and offline support.`,
     showPricingDisclosure: true,
+    heroImage: '/homepage-images/pos-banner.png',
+    heroImageAlt: 'Dolphin POS complete counter workstation with customer display',
   },
   '/solutions/cash-advance': {
     heroTitle: 'Working capital that moves at the speed of business',
@@ -174,6 +178,8 @@ export const categoryContent = {
     faqTitle: 'Straight answers about sales-based business funding',
     faqDescription: 'Review qualification, use of funds, remittance timing, and the differences from conventional financing.',
     metaDescription: `Access up to $250,000 through a ${siteConfig.company.fullName} merchant cash advance with fast review and revenue-based repayment.`,
+    heroImage: '/solution-images/merchant-cash-advance.png',
+    heroImageAlt: 'Merchant Cash Advance fast working capital funding for business growth',
   },
   '/solutions/ach-processing': {
     heroTitle: 'Move recurring revenue without card-network costs',
@@ -229,6 +235,8 @@ export const categoryContent = {
     faqTitle: 'ACH timing, costs, and domestic transfer questions',
     faqDescription: 'Learn where ACH fits, how quickly it settles, and why recurring businesses often choose it over cards.',
     metaDescription: 'Lower recurring payment costs with ACH processing for subscriptions, payroll, professional invoices, B2B transfers, and batch payments.',
+    heroImage: '/solution-images/ach-processing.png',
+    heroImageAlt: 'ACH bank-to-bank processing and recurring payments platform',
   },
   '/solutions/ebt-processing': {
     heroTitle: 'Open your checkout to SNAP and EBT shoppers',
@@ -284,6 +292,8 @@ export const categoryContent = {
     faqTitle: 'EBT authorization and checkout questions for food retailers',
     faqDescription: 'Understand SNAP approval, equipment choices, program costs, and the responsibilities of an authorized store.',
     metaDescription: `Get SNAP and EBT processing guidance, compatible POS setup, and reliable benefit acceptance for eligible food retailers with ${siteConfig.company.fullName}.`,
+    heroImage: '/solution-images/ebt-snap.png',
+    heroImageAlt: 'EBT and SNAP processing solutions for supermarkets and grocery counters',
   },
   '/solutions/atm-placement': {
     heroTitle: 'Turn customer cash access into passive revenue',
@@ -350,6 +360,8 @@ export const categoryContent = {
     faqTitle: 'ATM placement, revenue sharing, and service questions',
     faqDescription: 'See how locations qualify, what installation involves, and who keeps the machine operating after launch.',
     metaDescription: 'Add a full-service ATM at a qualifying business with potential free installation, passive surcharge revenue, cash loading, reporting, and maintenance.',
+    heroImage: '/solution-images/atm.png',
+    heroImageAlt: 'Managed commercial ATM placement for retail and convenience locations',
   },
   '/solutions/airvac': {
     heroTitle: 'Put unused vehicle space to work from day one',
@@ -416,6 +428,8 @@ export const categoryContent = {
     faqTitle: 'AirVac site, installation, and revenue questions',
     faqDescription: 'Understand what the property provides, what the operator handles, and how a hosted machine earns.',
     metaDescription: `Turn unused vehicle space into passive revenue with a managed ${siteConfig.company.shortName} AirVac placement for qualifying automotive properties.`,
+    heroImage: '/solution-images/airvac.png',
+    heroImageAlt: 'AirVac commercial air and vacuum station for automotive properties',
   },
   '/solutions/web-360': {
     heroTitle: 'Your entire digital storefront, managed in one place',
@@ -471,6 +485,8 @@ export const categoryContent = {
     faqTitle: 'Web 360+ scope, ownership, and launch questions',
     faqDescription: 'Clarify what is included, how services are packaged, and what to expect from migration through go-live.',
     metaDescription: `Bundle domain setup, managed hosting, custom web design, and ecommerce integration with ${siteConfig.company.fullName} Web 360+.`,
+    heroImage: '/solution-images/web360.png',
+    heroImageAlt: 'Web 360+ digital storefront and responsive web design platform',
   },
   '/industries/retail': {
     heroTitle: 'Smarter retail merchant services, from shelf to settlement',
@@ -528,8 +544,8 @@ export const categoryContent = {
     faqDescription: 'Understand the technology behind a quicker counter, tighter inventory, and a more connected retail operation.',
     showIndustryPosOffer: true,
     metaDescription: 'Explore smarter retail merchant services with Dolphin POS, advanced inventory, ecommerce integration, dual pricing, loyalty tools, and store insights.',
-    heroImage: 'https://images.unsplash.com/photo-1441986300917-64674bd600d8?auto=format&fit=crop&w=1200&q=80',
-    heroImageAlt: 'Retail employee assisting a customer at a modern checkout counter',
+    heroImage: '/homepage-images/retail.png',
+    heroImageAlt: 'Dolphin POS Retail System with smart barcode scanning and synchronized inventory',
   },
   '/industries/hospitality': {
     heroTitle: 'From reservation to receipt, one smooth payment flow',
@@ -593,8 +609,8 @@ export const categoryContent = {
     faqDescription: 'See how connected payments handle the moments unique to dining, lodging, catering, and mobile service.',
     showIndustryPosOffer: true,
     metaDescription: 'Connect hospitality POS, payments, bookings, online ordering, funding, loyalty, and guest checkout from reservation to receipt.',
-    heroImage: 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?auto=format&fit=crop&w=1200&q=80',
-    heroImageAlt: 'Welcoming restaurant dining room prepared for hospitality service',
+    heroImage: '/homepage-images/hospitality.png',
+    heroImageAlt: 'Dolphin POS Hospitality Solution for restaurants, cafes, and tableside ordering',
   },
   '/industries/services': {
     heroTitle: 'Payments made simple, so you can focus on people',
@@ -660,8 +676,8 @@ export const categoryContent = {
     faqDescription: 'Learn how to simplify recurring revenue, remote collection, integrations, and secure client checkout.',
     showIndustryPosOffer: true,
     metaDescription: 'Simplify professional service payments with booking-ready POS, recurring card and ACH billing, next-day deposits, and integrated websites.',
-    heroImage: 'https://images.unsplash.com/photo-1497366754035-f200968a6e72?auto=format&fit=crop&w=1200&q=80',
-    heroImageAlt: 'Professional team collaborating in a bright modern office',
+    heroImage: '/homepage-images/services.png',
+    heroImageAlt: 'Dolphin POS Professional Services Solution for salons, appointments, and client billing',
   },
   '/industries/healthcare': {
     heroTitle: 'Healthcare payments designed for medical professionals',
@@ -714,8 +730,8 @@ export const categoryContent = {
     faqDescription: 'Clarify privacy responsibilities, patient payment options, system connections, and implementation timing.',
     showIndustryPosOffer: true,
     metaDescription: 'Modernize healthcare payments with patient-friendly POS, card and ACH acceptance, HSA and FSA support, treatment billing, and online portals.',
-    heroImage: 'https://images.unsplash.com/photo-1576091160399-112ba8d25d1d?auto=format&fit=crop&w=1200&q=80',
-    heroImageAlt: 'Healthcare professional speaking with a patient in a clinical setting',
+    heroImage: '/homepage-images/healthcare.png',
+    heroImageAlt: 'Dolphin POS Healthcare Payment Solution for medical practices, clinics, copays, and patient billing',
   },
   '/industries/education': {
     heroTitle: 'Digitize educational payments for tuition, housing, and more',
@@ -775,8 +791,8 @@ export const categoryContent = {
     faqDescription: 'Explore safer collection, more efficient disbursement, software integration, and responsible cash-flow options.',
     showIndustryPosOffer: true,
     metaDescription: 'Digitize education payments for tuition, housing, campus sales, ACH disbursements, reconciliation, and flexible working capital.',
-    heroImage: 'https://images.unsplash.com/photo-1523050854058-8df90110c9f1?auto=format&fit=crop&w=1200&q=80',
-    heroImageAlt: 'Students walking together across a university campus',
+    heroImage: '/homepage-images/education.png',
+    heroImageAlt: 'Dolphin POS Education Solution for schools, tuition collection, and campus commerce',
   },
   '/industries/government': {
     heroTitle: 'Secure, streamlined payments for the public sector',
@@ -839,7 +855,7 @@ export const categoryContent = {
     faqDescription: 'Review the controls, integrations, settlement visibility, and service channels behind a dependable agency rollout.',
     showIndustryPosOffer: true,
     metaDescription: 'Streamline government payments with secure multichannel acceptance, centralized department management, compliance reporting, and citizen kiosks.',
-    heroImage: 'https://images.unsplash.com/photo-1529107386315-e1a2ed48a620?auto=format&fit=crop&w=1200&q=80',
-    heroImageAlt: 'Civic government building with classical columns',
+    heroImage: '/homepage-images/government.png',
+    heroImageAlt: 'Dolphin POS Public Sector and Municipal Payment Processing Solution',
   },
 }

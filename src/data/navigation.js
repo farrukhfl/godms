@@ -32,14 +32,14 @@ export const industries = [
 ]
 
 export const solutions = [
-  { label: 'Credit Card Processing', path: '/solutions/credit-card-processing', icon: CreditCard },
-  { label: 'POS Solutions', path: '/solutions/pos', icon: MonitorSmartphone },
-  { label: 'Merchant Cash Advance', path: '/solutions/cash-advance', icon: Banknote },
-  { label: 'ACH Processing', path: '/solutions/ach-processing', icon: CircleDollarSign },
-  { label: 'EBT Processing', path: '/solutions/ebt-processing', icon: WalletCards },
-  { label: 'ATM Placement', path: '/solutions/atm-placement', icon: Landmark },
-  { label: 'AirVac Placement', path: '/solutions/airvac', icon: Wind },
-  { label: 'Web 360+', path: '/solutions/web-360', icon: ScanLine },
+  { label: 'Credit Card Processing', path: '/solutions/credit-card-processing', icon: CreditCard, description: 'Dual pricing, zero card fees, and next-day funding.' },
+  { label: 'POS Solutions', path: '/solutions/pos', icon: MonitorSmartphone, description: 'All-in-one counter workstations with inventory sync.' },
+  { label: 'Merchant Cash Advance', path: '/solutions/cash-advance', icon: Banknote, description: 'Revenue-based growth capital up to $250k in 48 hours.' },
+  { label: 'ACH Processing', path: '/solutions/ach-processing', icon: CircleDollarSign, description: 'Lower-cost domestic bank transfers and recurring billing.' },
+  { label: 'EBT Processing', path: '/solutions/ebt-processing', icon: WalletCards, description: 'Dependable SNAP and eWIC benefit acceptance for retailers.' },
+  { label: 'ATM Placement', path: '/solutions/atm-placement', icon: Landmark, description: 'Turnkey managed ATM machines with passive revenue sharing.' },
+  { label: 'AirVac Placement', path: '/solutions/airvac', icon: Wind, description: 'Free commercial air and vacuum machines for vehicle sites.' },
+  { label: 'Web 360+', path: '/solutions/web-360', icon: ScanLine, description: 'Custom web design, hosting, domains, and connected ecommerce.' },
 ]
 
 export const storeCategories = [

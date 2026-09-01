@@ -37,7 +37,27 @@ export default function CategoryPageTemplate({ title, heroTitle, description, ty
               <Button to="/contact" className={`${isAnimatedPage ? 'hero-animate-4' : ''} mt-8 px-7 py-4 text-base`}>Talk to a payment expert <ArrowRight aria-hidden="true" size={19} /></Button>
               {showPricingDisclosure && <PricingDisclosure dark className="mt-5 max-w-2xl" />}
             </div>
-            {heroImage && <img src={heroImage} alt={heroImageAlt} loading="lazy" decoding="async" width="900" height="700" className={`${isAnimatedPage ? 'industry-hero-image' : ''} h-72 w-full rounded-2xl object-cover shadow-2xl shadow-black/20 sm:h-96`} />}
+            {heroImage && (
+              <div className="relative mx-auto w-full max-w-lg lg:ml-auto">
+                <div className="absolute -inset-4 -z-10 rounded-3xl bg-gradient-to-tr from-primary/30 via-accent/20 to-primary/10 blur-2xl" />
+                <div className="card-image-sheen relative overflow-hidden rounded-[2rem] border border-white/20 bg-slate-900/90 p-3 shadow-2xl shadow-navy/60 backdrop-blur-md group">
+                  <img
+                    src={heroImage}
+                    alt={heroImageAlt || title}
+                    loading="lazy"
+                    decoding="async"
+                    width="900"
+                    height="700"
+                    className={`${isAnimatedPage ? 'industry-hero-image' : ''} h-72 w-full rounded-2xl object-cover shadow-2xl transition duration-700 ease-out group-hover:scale-[1.03] sm:h-96`}
+                  />
+                  <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-slate-950/40 via-transparent to-transparent" />
+                  <div className="absolute bottom-5 left-5 rounded-full border border-white/20 bg-slate-950/80 px-3.5 py-1.5 text-xs font-bold text-white shadow-lg backdrop-blur-md flex items-center gap-2">
+                    <span className="h-2 w-2 rounded-full bg-accent animate-pulse" />
+                    Verified {type}
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </section>

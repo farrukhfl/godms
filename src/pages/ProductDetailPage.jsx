@@ -111,6 +111,15 @@ function CheckoutModal({ product, quantity, isOpen, onClose }) {
     state: '',
     zip: '',
   })
+  const [shipping, setShipping] = useState({
+    firstName: '',
+    lastName: '',
+    country: 'US',
+    street: '',
+    city: '',
+    state: '',
+    zip: '',
+  })
   const [shipToDifferentAddress, setShipToDifferentAddress] = useState(false)
   const [payment, setPayment] = useState({
     cardNumber: '',
@@ -133,6 +142,11 @@ function CheckoutModal({ product, quantity, isOpen, onClose }) {
   const handleCustomerChange = (key, value) => {
     setCustomer((prev) => ({ ...prev, [key]: value }))
     setErrors((prev) => ({ ...prev, [key]: '' }))
+  }
+
+  const handleShippingChange = (key, value) => {
+    setShipping((prev) => ({ ...prev, [key]: value }))
+    setErrors((prev) => ({ ...prev, [`shipping_${key}`]: '' }))
   }
 
   const handlePaymentChange = (key, value) => {
@@ -160,6 +174,16 @@ function CheckoutModal({ product, quantity, isOpen, onClose }) {
     required('city', customer.city, 'City is required.')
     required('state', customer.state, 'State is required.')
     required('zip', customer.zip, 'ZIP Code is required.')
+
+    // Validate alternative shipping address if enabled
+    if (shipToDifferentAddress) {
+      required('shipping_firstName', shipping.firstName, 'Shipping first name is required.')
+      required('shipping_lastName', shipping.lastName, 'Shipping last name is required.')
+      required('shipping_street', shipping.street, 'Shipping street address is required.')
+      required('shipping_city', shipping.city, 'Shipping city is required.')
+      required('shipping_state', shipping.state, 'Shipping state is required.')
+      required('shipping_zip', shipping.zip, 'Shipping ZIP Code is required.')
+    }
 
     // Payment validation
     const cleanCard = digits(payment.cardNumber, 20)
@@ -237,6 +261,18 @@ function CheckoutModal({ product, quantity, isOpen, onClose }) {
             cardCode: payment.cardCode.trim(),
           },
         },
+      }
+
+      if (shipToDifferentAddress) {
+        payload.shipping = {
+          firstName: shipping.firstName.trim(),
+          lastName: shipping.lastName.trim(),
+          street: shipping.street.trim(),
+          city: shipping.city.trim(),
+          state: shipping.state.trim(),
+          zip: shipping.zip.trim(),
+          country: 'US',
+        }
       }
 
       const result = await placeOrder(payload)
@@ -416,6 +452,78 @@ function CheckoutModal({ product, quantity, isOpen, onClose }) {
                       />
                       <span>Ship to a different address</span>
                     </label>
+
+                    {shipToDifferentAddress && (
+                      <div className="mt-4 rounded-2xl border border-primary/20 bg-slate-50/70 p-4 space-y-4">
+                        <div className="flex items-center gap-2">
+                          <Truck size={16} className="text-primary" />
+                          <h5 className="text-xs font-extrabold uppercase tracking-wider text-navy">
+                            Separate Shipping Address
+                          </h5>
+                        </div>
+
+                        <div className="grid gap-4 sm:grid-cols-2">
+                          <FormField id="shipping_firstName" label="Recipient First Name" required error={errors.shipping_firstName}>
+                            <input
+                              id="shipping_firstName"
+                              value={shipping.firstName}
+                              onChange={(e) => handleShippingChange('firstName', e.target.value)}
+                              className={`${formControlClasses} ${errors.shipping_firstName ? 'border-rose-500' : ''}`}
+                            />
+                          </FormField>
+                          <FormField id="shipping_lastName" label="Recipient Last Name" required error={errors.shipping_lastName}>
+                            <input
+                              id="shipping_lastName"
+                              value={shipping.lastName}
+                              onChange={(e) => handleShippingChange('lastName', e.target.value)}
+                              className={`${formControlClasses} ${errors.shipping_lastName ? 'border-rose-500' : ''}`}
+                            />
+                          </FormField>
+                          <div className="sm:col-span-2">
+                            <FormField id="shipping_street" label="Shipping Street Address" required error={errors.shipping_street}>
+                              <input
+                                id="shipping_street"
+                                value={shipping.street}
+                                onChange={(e) => handleShippingChange('street', e.target.value)}
+                                placeholder="456 Destination Ave, Suite 200"
+                                className={`${formControlClasses} ${errors.shipping_street ? 'border-rose-500' : ''}`}
+                              />
+                            </FormField>
+                          </div>
+                          <FormField id="shipping_city" label="City" required error={errors.shipping_city}>
+                            <input
+                              id="shipping_city"
+                              value={shipping.city}
+                              onChange={(e) => handleShippingChange('city', e.target.value)}
+                              className={`${formControlClasses} ${errors.shipping_city ? 'border-rose-500' : ''}`}
+                            />
+                          </FormField>
+                          <FormField id="shipping_state" label="State" required error={errors.shipping_state}>
+                            <select
+                              id="shipping_state"
+                              value={shipping.state}
+                              onChange={(e) => handleShippingChange('state', e.target.value)}
+                              className={`${formControlClasses} ${errors.shipping_state ? 'border-rose-500' : ''}`}
+                            >
+                              <option value="">Select State</option>
+                              {states.map((s) => (
+                                <option key={s} value={s}>{s}</option>
+                              ))}
+                            </select>
+                          </FormField>
+                          <FormField id="shipping_zip" label="ZIP Code" required error={errors.shipping_zip}>
+                            <input
+                              id="shipping_zip"
+                              value={shipping.zip}
+                              onChange={(e) => handleShippingChange('zip', digits(e.target.value, 5))}
+                              placeholder="75001"
+                              maxLength={5}
+                              className={`${formControlClasses} ${errors.shipping_zip ? 'border-rose-500' : ''}`}
+                            />
+                          </FormField>
+                        </div>
+                      </div>
+                    )}
                   </div>
 
                   {/* Step 2: Payment Details */}
@@ -502,6 +610,14 @@ function CheckoutModal({ product, quantity, isOpen, onClose }) {
                       <div className="flex justify-between">
                         <span>Estimated Tax:</span>
                         <span className="font-bold text-navy">${tax.toFixed(2)}</span>
+                      </div>
+                      <div className="flex justify-between border-t border-slate-200 pt-2.5">
+                        <span>Destination:</span>
+                        <span className="font-bold text-navy truncate max-w-[180px] text-right">
+                          {shipToDifferentAddress
+                            ? (shipping.city && shipping.state ? `${shipping.city}, ${shipping.state} (Alternate)` : 'Separate Shipping Address')
+                            : (customer.city && customer.state ? `${customer.city}, ${customer.state}` : 'Customer Address')}
+                        </span>
                       </div>
                       <div className="flex justify-between border-t border-slate-200 pt-3 text-sm font-black text-navy">
                         <span>Order Total:</span>
