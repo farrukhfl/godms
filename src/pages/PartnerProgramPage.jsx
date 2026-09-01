@@ -1,4 +1,17 @@
-import { ArrowRight, BarChart3, Building2, CheckCircle2, Handshake, Headphones, Landmark, Layers3, ShoppingBag, Utensils, WalletCards } from 'lucide-react'
+import {
+  ArrowRight,
+  BarChart3,
+  Building2,
+  CheckCircle2,
+  Handshake,
+  Headphones,
+  Landmark,
+  Layers3,
+  LoaderCircle,
+  ShoppingBag,
+  Utensils,
+  WalletCards,
+} from 'lucide-react'
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import Seo from '../components/Seo'
@@ -8,6 +21,7 @@ import Card from '../components/ui/Card'
 import FormField, { formControlClasses } from '../components/ui/FormField'
 import Reveal from '../components/ui/Reveal'
 import SectionHeading from '../components/ui/SectionHeading'
+import { submitAgentRequest, unwrapData } from '../features/account-application/api'
 
 const partnerReasons = [
   { icon: WalletCards, title: 'Recurring Revenue', text: 'Earn commissions when referred merchants activate and continue processing under program terms.' },
@@ -60,7 +74,27 @@ const faqs = [
   { question: 'Can I refer businesses that are already my clients?', answer: 'Yes. Existing clients can be referred when they are eligible, interested, and not already assigned or active with DMS under conflicting attribution. The partner team can check status before outreach.' },
 ]
 
-const initialValues = { firstName: '', lastName: '', email: '', phone: '', companyName: '', companyWebsite: '', partnerType: '', networkSize: '', message: '', consent: false }
+const initialValues = {
+  firstName: '',
+  lastName: '',
+  email: '',
+  phone: '',
+  jobTitle: 'Sales Manager',
+  address: '',
+  companyName: '',
+  companyWebsite: '',
+  partnerType: '',
+  networkSize: '',
+  message: '',
+  consent: false,
+}
+
+function phoneFormat(value) {
+  const number = String(value || '').replace(/\D/g, '').slice(0, 10)
+  if (number.length < 4) return number
+  if (number.length < 7) return `(${number.slice(0, 3)}) ${number.slice(3)}`
+  return `(${number.slice(0, 3)}) ${number.slice(3, 6)}-${number.slice(6)}`
+}
 
 function validate(values) {
   const errors = {}
@@ -70,9 +104,10 @@ function validate(values) {
   else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(values.email)) errors.email = 'Enter a valid email address.'
   if (!values.phone.trim()) errors.phone = 'Please enter your phone number.'
   else if (values.phone.replace(/\D/g, '').length < 10) errors.phone = 'Enter a valid phone number with at least 10 digits.'
+  if (!values.jobTitle.trim()) errors.jobTitle = 'Please enter your job title.'
+  if (!values.address.trim()) errors.address = 'Please enter your business or office address.'
   if (!values.companyName.trim()) errors.companyName = 'Please enter your company name.'
   if (!values.partnerType) errors.partnerType = 'Select the option that best describes your business.'
-  if (!values.message.trim()) errors.message = 'Tell us briefly about your partnership goals.'
   if (!values.consent) errors.consent = 'Consent is required before applying.'
   return errors
 }
@@ -81,27 +116,57 @@ export default function PartnerProgramPage() {
   const [values, setValues] = useState(initialValues)
   const [errors, setErrors] = useState({})
   const [submitted, setSubmitted] = useState(false)
+  const [apiError, setApiError] = useState('')
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [applicationRef, setApplicationRef] = useState('')
 
   function handleChange(event) {
     const { name, value, checked, type } = event.target
-    setValues((current) => ({ ...current, [name]: type === 'checkbox' ? checked : value }))
+    const updatedValue = name === 'phone' ? phoneFormat(value) : (type === 'checkbox' ? checked : value)
+    setValues((current) => ({ ...current, [name]: updatedValue }))
     if (errors[name]) setErrors((current) => ({ ...current, [name]: '' }))
+    setApiError('')
   }
 
-  function handleSubmit(event) {
+  async function handleSubmit(event) {
     event.preventDefault()
     const nextErrors = validate(values)
     setErrors(nextErrors)
+    setApiError('')
+
     if (Object.keys(nextErrors).length) {
       requestAnimationFrame(() => document.getElementById(`partner-${Object.keys(nextErrors)[0]}`)?.focus())
       return
     }
-    setSubmitted(true)
+
+    setIsSubmitting(true)
+
+    try {
+      const payload = {
+        name: `${values.firstName.trim()} ${values.lastName.trim()}`,
+        email: values.email.trim(),
+        jobTitle: values.jobTitle.trim() || 'Partner',
+        phoneNumber: values.phone.trim(),
+        address: values.address.trim(),
+        businessWebsite: values.companyWebsite.trim() || undefined,
+        tenantId: 1,
+      }
+
+      const result = await submitAgentRequest(payload)
+      const data = unwrapData(result)
+      setApplicationRef(data?.id ? `DMS-AGT-${data.id}` : `DMS-PARTNER-${Date.now().toString().slice(-6)}`)
+      setSubmitted(true)
+    } catch (err) {
+      setApiError(err.message || 'Failed to submit partner application. Please verify your details and try again.')
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
   function resetForm() {
     setValues(initialValues)
     setErrors({})
+    setApiError('')
     setSubmitted(false)
   }
 
@@ -165,25 +230,109 @@ export default function PartnerProgramPage() {
 
       <section id="partner-application" className="scroll-mt-32 py-20 sm:py-24">
         <div className="mx-auto grid max-w-7xl gap-12 px-4 sm:px-6 lg:grid-cols-[0.7fr_1.3fr] lg:gap-16 lg:px-8">
-          <Reveal direction="left" as="aside"><p className="text-sm font-bold uppercase tracking-[0.2em] text-primary">Partner Application</p><h2 className="mt-3 text-4xl font-extrabold text-navy">Build an ongoing partnership with DMS.</h2><p className="mt-5 leading-7 text-slate-600">Tell us about your business, network, and goals. The partner success team can review fit, explain attribution and compensation, and guide formal onboarding.</p></Reveal>
+          <Reveal direction="left" as="aside">
+            <p className="text-sm font-bold uppercase tracking-[0.2em] text-primary">Partner Application</p>
+            <h2 className="mt-3 text-4xl font-extrabold text-navy">Build an ongoing partnership with DMS.</h2>
+            <p className="mt-5 leading-7 text-slate-600">Tell us about your business, network, and goals. The partner success team can review fit, explain attribution and compensation, and guide formal onboarding.</p>
+            
+            <div className="mt-8 space-y-4 rounded-2xl border border-primary/20 bg-mist p-6 text-sm text-slate-700 font-semibold">
+              <p className="flex items-center gap-2 text-navy font-bold">
+                <CheckCircle2 size={18} className="text-primary" /> Uncapped Earning Potential
+              </p>
+              <p className="flex items-center gap-2 text-navy font-bold">
+                <CheckCircle2 size={18} className="text-primary" /> Dedicated Partner Portal & Tracking
+              </p>
+              <p className="flex items-center gap-2 text-navy font-bold">
+                <CheckCircle2 size={18} className="text-primary" /> Full Suite of 8 Payment Solutions
+              </p>
+            </div>
+          </Reveal>
+
           <Reveal direction="right" delay={140} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-soft sm:p-8">
-            {submitted ? <div className="flex min-h-[580px] flex-col items-center justify-center text-center" role="status"><span className="flex h-16 w-16 items-center justify-center rounded-full bg-emerald-100 text-emerald-700"><CheckCircle2 aria-hidden="true" size={32} /></span><h2 className="mt-6 text-3xl font-extrabold text-navy">Your application is recorded.</h2><p className="mt-3 max-w-md leading-7 text-slate-600">Thanks for your interest in building with DMS. A partner success specialist can follow up to discuss program fit and next steps.</p><Button variant="outline" className="mt-7" onClick={resetForm}>Start another application</Button></div> : <form onSubmit={handleSubmit} noValidate>
-              <div className="grid gap-6 sm:grid-cols-2">
-                <FormField id="partner-firstName" label="First Name" error={errors.firstName} required><input id="partner-firstName" name="firstName" autoComplete="given-name" value={values.firstName} onChange={handleChange} className={`${formControlClasses} ${errors.firstName ? 'border-rose-500' : ''}`} /></FormField>
-                <FormField id="partner-lastName" label="Last Name" error={errors.lastName} required><input id="partner-lastName" name="lastName" autoComplete="family-name" value={values.lastName} onChange={handleChange} className={`${formControlClasses} ${errors.lastName ? 'border-rose-500' : ''}`} /></FormField>
-                <FormField id="partner-email" label="Email" error={errors.email} required><input id="partner-email" name="email" type="email" autoComplete="email" value={values.email} onChange={handleChange} className={`${formControlClasses} ${errors.email ? 'border-rose-500' : ''}`} /></FormField>
-                <FormField id="partner-phone" label="Phone" error={errors.phone} required><input id="partner-phone" name="phone" type="tel" autoComplete="tel" value={values.phone} onChange={handleChange} className={`${formControlClasses} ${errors.phone ? 'border-rose-500' : ''}`} /></FormField>
-                <FormField id="partner-companyName" label="Company Name" error={errors.companyName} required><input id="partner-companyName" name="companyName" autoComplete="organization" value={values.companyName} onChange={handleChange} className={`${formControlClasses} ${errors.companyName ? 'border-rose-500' : ''}`} /></FormField>
-                <FormField id="partner-companyWebsite" label="Company Website"><input id="partner-companyWebsite" name="companyWebsite" type="url" placeholder="https://" value={values.companyWebsite} onChange={handleChange} className={formControlClasses} /></FormField>
-                <FormField id="partner-partnerType" label="Business Type" error={errors.partnerType} required><select id="partner-partnerType" name="partnerType" value={values.partnerType} onChange={handleChange} className={`${formControlClasses} ${errors.partnerType ? 'border-rose-500' : ''}`}><option value="">Select one</option>{['Consultant or Advisor', 'Software or Technology Provider', 'Financial Professional', 'Association or Community', 'Sales Organization', 'Other'].map((item) => <option key={item}>{item}</option>)}</select></FormField>
-                <FormField id="partner-networkSize" label="Potential Monthly Referrals"><select id="partner-networkSize" name="networkSize" value={values.networkSize} onChange={handleChange} className={formControlClasses}><option value="">Select a range</option>{['1-2', '3-5', '6-10', '11+'].map((item) => <option key={item}>{item}</option>)}</select></FormField>
+            {submitted ? (
+              <div className="flex min-h-[520px] flex-col items-center justify-center text-center" role="status">
+                <span className="flex h-20 w-20 items-center justify-center rounded-full bg-emerald-100 text-emerald-700">
+                  <CheckCircle2 aria-hidden="true" size={40} />
+                </span>
+                <p className="mt-6 text-sm font-bold uppercase tracking-[0.2em] text-primary">Application Submitted</p>
+                <h2 className="mt-2 text-3xl font-extrabold text-navy">Your partner request is received!</h2>
+                <p className="mt-3 max-w-md leading-7 text-slate-600">
+                  Thanks for your interest in partnering with Dolphin Merchant Services. A partner success specialist will review your details and contact you shortly regarding program onboarding.
+                </p>
+                {applicationRef && (
+                  <p className="mt-3 text-xs font-bold text-slate-500">
+                    Application Reference: {applicationRef}
+                  </p>
+                )}
+                <Button variant="outline" className="mt-7" onClick={resetForm}>
+                  Submit another application
+                </Button>
               </div>
-              <div className="mt-6"><FormField id="partner-message" label="Partnership Goals" error={errors.message} required><textarea id="partner-message" name="message" rows="5" value={values.message} onChange={handleChange} placeholder="Tell us about your clients, network, and how you would like to work with DMS." className={`${formControlClasses} resize-y ${errors.message ? 'border-rose-500' : ''}`} /></FormField></div>
-              <label className="mt-7 flex items-start gap-3 text-sm leading-6 text-slate-600"><input id="partner-consent" name="consent" type="checkbox" checked={values.consent} onChange={handleChange} className="mt-1 h-4 w-4 shrink-0 accent-primary" /><span>I consent to DMS contacting me about the Partner Program and acknowledge the <Link to="/privacy-policy" className="font-bold text-primary underline">Privacy Policy</Link>.</span></label>
-              {errors.consent && <p id="partner-consent-error" className="mt-2 text-sm font-semibold text-rose-600">{errors.consent}</p>}
-              <Button type="submit" className="mt-7">Apply to Partner <ArrowRight aria-hidden="true" size={18} /></Button>
-              <p className="mt-4 text-xs leading-5 text-slate-500">This demonstration form validates locally and does not transmit personal information or create a partner agreement.</p>
-            </form>}
+            ) : (
+              <form onSubmit={handleSubmit} noValidate>
+                {apiError && (
+                  <div role="alert" className="mb-6 rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm font-semibold text-rose-700">
+                    {apiError}
+                  </div>
+                )}
+
+                <div className="grid gap-6 sm:grid-cols-2">
+                  <FormField id="partner-firstName" label="First Name" error={errors.firstName} required>
+                    <input id="partner-firstName" name="firstName" autoComplete="given-name" value={values.firstName} onChange={handleChange} className={`${formControlClasses} ${errors.firstName ? 'border-rose-500' : ''}`} />
+                  </FormField>
+                  <FormField id="partner-lastName" label="Last Name" error={errors.lastName} required>
+                    <input id="partner-lastName" name="lastName" autoComplete="family-name" value={values.lastName} onChange={handleChange} className={`${formControlClasses} ${errors.lastName ? 'border-rose-500' : ''}`} />
+                  </FormField>
+                  <FormField id="partner-email" label="Business Email" error={errors.email} required>
+                    <input id="partner-email" name="email" type="email" autoComplete="email" value={values.email} onChange={handleChange} className={`${formControlClasses} ${errors.email ? 'border-rose-500' : ''}`} />
+                  </FormField>
+                  <FormField id="partner-phone" label="Phone Number" error={errors.phone} required>
+                    <input id="partner-phone" name="phone" type="tel" autoComplete="tel" placeholder="(555) 000-0000" value={values.phone} onChange={handleChange} className={`${formControlClasses} ${errors.phone ? 'border-rose-500' : ''}`} />
+                  </FormField>
+                  <FormField id="partner-jobTitle" label="Job Title" error={errors.jobTitle} required>
+                    <input id="partner-jobTitle" name="jobTitle" placeholder="e.g. Sales Manager" value={values.jobTitle} onChange={handleChange} className={`${formControlClasses} ${errors.jobTitle ? 'border-rose-500' : ''}`} />
+                  </FormField>
+                  <FormField id="partner-companyName" label="Company Name" error={errors.companyName} required>
+                    <input id="partner-companyName" name="companyName" autoComplete="organization" value={values.companyName} onChange={handleChange} className={`${formControlClasses} ${errors.companyName ? 'border-rose-500' : ''}`} />
+                  </FormField>
+                  <div className="sm:col-span-2">
+                    <FormField id="partner-address" label="Business Street Address" error={errors.address} required>
+                      <input id="partner-address" name="address" placeholder="123 Main St, Suite 200, City, State ZIP" value={values.address} onChange={handleChange} className={`${formControlClasses} ${errors.address ? 'border-rose-500' : ''}`} />
+                    </FormField>
+                  </div>
+                  <FormField id="partner-companyWebsite" label="Company Website (Optional)">
+                    <input id="partner-companyWebsite" name="companyWebsite" type="url" placeholder="https://example.com" value={values.companyWebsite} onChange={handleChange} className={formControlClasses} />
+                  </FormField>
+                  <FormField id="partner-partnerType" label="Business Type" error={errors.partnerType} required>
+                    <select id="partner-partnerType" name="partnerType" value={values.partnerType} onChange={handleChange} className={`${formControlClasses} ${errors.partnerType ? 'border-rose-500' : ''}`}>
+                      <option value="">Select one</option>
+                      {['Consultant or Advisor', 'Software or Technology Provider', 'Financial Professional', 'Association or Community', 'Sales Organization', 'Other'].map((item) => <option key={item}>{item}</option>)}
+                    </select>
+                  </FormField>
+                </div>
+
+                <div className="mt-6">
+                  <FormField id="partner-message" label="Partnership Goals & Client Network (Optional)">
+                    <textarea id="partner-message" name="message" rows="4" value={values.message} onChange={handleChange} placeholder="Tell us briefly about your clients, industry focus, and partnership goals." className={`${formControlClasses} resize-y`} />
+                  </FormField>
+                </div>
+
+                <label className="mt-7 flex items-start gap-3 text-sm leading-6 text-slate-600">
+                  <input id="partner-consent" name="consent" type="checkbox" checked={values.consent} onChange={handleChange} className="mt-1 h-4 w-4 shrink-0 accent-primary" />
+                  <span>I consent to DMS contacting me about the Partner Program and acknowledge the <Link to="/privacy-policy" className="font-bold text-primary underline">Privacy Policy</Link>.</span>
+                </label>
+                {errors.consent && <p id="partner-consent-error" className="mt-2 text-sm font-semibold text-rose-600">{errors.consent}</p>}
+
+                <Button type="submit" disabled={isSubmitting} className="mt-7">
+                  {isSubmitting ? (
+                    <><LoaderCircle className="animate-spin" size={18} /> Submitting Application...</>
+                  ) : (
+                    <>Apply to Partner <ArrowRight aria-hidden="true" size={18} /></>
+                  )}
+                </Button>
+                <p className="mt-4 text-xs leading-5 text-slate-500">Your information is transmitted securely to our partner success department.</p>
+              </form>
+            )}
           </Reveal>
         </div>
       </section>

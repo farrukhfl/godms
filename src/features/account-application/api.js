@@ -166,3 +166,13 @@ export async function placeOrder(orderPayload) {
     body: orderPayload,
   })
 }
+
+export async function submitAgentRequest(agentData) {
+  return applicationRequest('agent-request', {
+    method: 'POST',
+    body: {
+      tenantId: 1,
+      ...agentData,
+    },
+  })
+}
