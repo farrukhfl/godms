@@ -9,7 +9,16 @@ import { solutions } from '../data/navigation'
 import { siteConfig } from '../data/siteConfig'
 import { postForm } from '../utils/api'
 
-const initialValues = { name: '', businessName: '', email: '', phone: '', service: '', message: '' }
+const initialValues = {
+  name: '',
+  businessName: '',
+  email: '',
+  phone: '',
+  service: '',
+  message: '',
+  _hp_confirm: '',
+  _hp_company_sec: '',
+}
 
 function phoneFormat(value) {
   const number = String(value || '').replace(/\D/g, '').slice(0, 10)
@@ -37,6 +46,7 @@ export default function ContactPage() {
   const [submitted, setSubmitted] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState('')
+  const [startedAt] = useState(() => Date.now())
 
   function handleChange(event) {
     const { name, value } = event.target
@@ -67,6 +77,9 @@ export default function ContactPage() {
         message: values.message.trim(),
         service: values.service,
         solution: values.service,
+        _hp_confirm: values._hp_confirm || undefined,
+        _hp_company_sec: values._hp_company_sec || undefined,
+        _submission_started_at: startedAt,
       })
       setSubmitted(true)
     } catch (error) {
@@ -107,6 +120,12 @@ export default function ContactPage() {
               </div>
             ) : (
               <form onSubmit={handleSubmit} noValidate>
+                {/* Anti-spam Honeypots */}
+                <div aria-hidden="true" style={{ opacity: 0, position: 'absolute', left: '-9999px', height: 0, width: 0, overflow: 'hidden' }}>
+                  <input type="text" name="_hp_confirm" tabIndex="-1" autoComplete="off" value={values._hp_confirm} onChange={handleChange} />
+                  <input type="text" name="_hp_company_sec" tabIndex="-1" autoComplete="off" value={values._hp_company_sec} onChange={handleChange} />
+                </div>
+
                 {submitError && <p role="alert" className="mb-6 rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm font-semibold text-rose-700">{submitError}</p>}
                 <div className="grid gap-6 sm:grid-cols-2">
                   <FormField id="name" label="Name" error={errors.name} required>

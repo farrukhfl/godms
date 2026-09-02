@@ -22,7 +22,19 @@ const industries = [
   { icon: Building2, title: 'Professional Services', text: 'Appointment, membership, and client-based businesses.' },
   { icon: Landmark, title: 'Government', text: 'Public-facing departments modernizing collections.' },
 ]
-const initialValues = { firstName: '', lastName: '', phone: '', email: '', companyName: '', companyWebsite: '', source: '', service: '', consent: false }
+const initialValues = {
+  firstName: '',
+  lastName: '',
+  phone: '',
+  email: '',
+  companyName: '',
+  companyWebsite: '',
+  source: '',
+  service: '',
+  consent: false,
+  _hp_confirm: '',
+  _hp_company_sec: '',
+}
 
 function phoneFormat(value) {
   const number = String(value || '').replace(/\D/g, '').slice(0, 10)
@@ -52,6 +64,7 @@ export default function ReferralPartnerPage() {
   const [submitted, setSubmitted] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState('')
+  const [startedAt] = useState(() => Date.now())
 
   function handleChange(event) {
     const { name, value, checked, type } = event.target
@@ -84,6 +97,9 @@ export default function ReferralPartnerPage() {
         source: values.source,
         service: values.service,
         consent: values.consent,
+        _hp_confirm: values._hp_confirm || undefined,
+        _hp_company_sec: values._hp_company_sec || undefined,
+        _submission_started_at: startedAt,
       })
       setSubmitted(true)
     } catch (err) {
@@ -149,6 +165,12 @@ export default function ReferralPartnerPage() {
               <p className="mt-3 max-w-md leading-7 text-slate-600">Your partner interest has been recorded. A DMS team member can follow up with the program details and referral process.</p>
               <Button variant="outline" className="mt-7" onClick={resetForm}>Submit another request</Button>
             </div> : <form onSubmit={handleSubmit} noValidate>
+              {/* Anti-spam Honeypots */}
+              <div aria-hidden="true" style={{ opacity: 0, position: 'absolute', left: '-9999px', height: 0, width: 0, overflow: 'hidden' }}>
+                <input type="text" name="_hp_confirm" tabIndex="-1" autoComplete="off" value={values._hp_confirm} onChange={handleChange} />
+                <input type="text" name="_hp_company_sec" tabIndex="-1" autoComplete="off" value={values._hp_company_sec} onChange={handleChange} />
+              </div>
+
               {submitError && <p role="alert" className="mb-6 rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm font-semibold text-rose-700">{submitError}</p>}
               <div className="grid gap-6 sm:grid-cols-2">
                 <FormField id="referral-firstName" label="First Name" error={errors.firstName} required><input id="referral-firstName" name="firstName" autoComplete="given-name" value={values.firstName} onChange={handleChange} className={`${formControlClasses} ${errors.firstName ? 'border-rose-500' : ''}`} /></FormField>

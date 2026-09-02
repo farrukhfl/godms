@@ -20,7 +20,15 @@ const work = [
 
 const hiringSteps = ['Application Received', 'Application Shortlisted', 'Online Assessment', 'Technical Interview', 'HR Interview', 'Final Interview', 'Job Offered']
 const benefits = ['Competitive Salary', 'Performance Bonuses', 'Project-based Incentives', 'Professional Development Opportunities', 'Training & Growth', 'Supportive Culture', 'Remote Flexibility']
-const initialValues = { name: '', email: '', phone: '', resume: null, message: '' }
+const initialValues = {
+  name: '',
+  email: '',
+  phone: '',
+  resume: null,
+  message: '',
+  _hp_confirm: '',
+  _hp_company_sec: '',
+}
 
 function phoneFormat(value) {
   const number = String(value || '').replace(/\D/g, '').slice(0, 10)
@@ -48,6 +56,7 @@ export default function CareersPage() {
   const [submitted, setSubmitted] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState('')
+  const [startedAt] = useState(() => Date.now())
 
   function handleChange(event) {
     const { name, value, files } = event.target
@@ -76,6 +85,9 @@ export default function CareersPage() {
         phone: values.phone.trim(),
         message: values.message.trim(),
         resumeFileName: values.resume?.name || 'resume.pdf',
+        _hp_confirm: values._hp_confirm || undefined,
+        _hp_company_sec: values._hp_company_sec || undefined,
+        _submission_started_at: startedAt,
       })
       setSubmitted(true)
     } catch (err) {
@@ -170,6 +182,12 @@ export default function CareersPage() {
               <p className="mt-3 max-w-md leading-7 text-slate-600">Thanks for considering Dolphin Merchant Services. Our talent team will review your qualifications and contact you about relevant opportunities.</p>
               <Button variant="outline" className="mt-7" onClick={resetForm}>Submit another profile</Button>
             </div> : <form onSubmit={handleSubmit} noValidate>
+              {/* Anti-spam Honeypots */}
+              <div aria-hidden="true" style={{ opacity: 0, position: 'absolute', left: '-9999px', height: 0, width: 0, overflow: 'hidden' }}>
+                <input type="text" name="_hp_confirm" tabIndex="-1" autoComplete="off" value={values._hp_confirm} onChange={handleChange} />
+                <input type="text" name="_hp_company_sec" tabIndex="-1" autoComplete="off" value={values._hp_company_sec} onChange={handleChange} />
+              </div>
+
               {submitError && <p role="alert" className="mb-6 rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm font-semibold text-rose-700">{submitError}</p>}
               <div className="grid gap-6 sm:grid-cols-2">
                 <FormField id="career-name" label="Name" error={errors.name} required><input id="career-name" name="name" autoComplete="name" value={values.name} onChange={handleChange} className={`${formControlClasses} ${errors.name ? 'border-rose-500' : ''}`} /></FormField>
