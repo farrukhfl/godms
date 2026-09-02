@@ -24,7 +24,8 @@ import {
 } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { applicationRequest, unwrapData } from '../../features/account-application/api'
+import { wcStoreProducts } from '../../data/storeProducts'
+import { fetchStoreProducts } from '../../features/account-application/api'
 import { getProductImageUrl } from '../../utils/productImages'
 import Button from '../ui/Button'
 import PricingDisclosure from '../ui/PricingDisclosure'
@@ -55,41 +56,32 @@ function isItemInStock(item) {
   )
 }
 
+const categorySlugMap = {
+  '/store/printers': ['printers'],
+  'printers': ['printers'],
+  '/store/pos': ['point-of-sale'],
+  'pos': ['point-of-sale'],
+  '/store/clover': ['clover'],
+  'clover': ['clover'],
+  '/store/barcode-scanners': ['barcode-scanners', 'symbol'],
+  'barcode-scanners': ['barcode-scanners', 'symbol'],
+  '/store/pos-equipment': ['point-of-sale-equipment'],
+  'pos-equipment': ['point-of-sale-equipment'],
+  '/store/atm-accessories': ['atm-and-accessories', 'atms', 'atm-signs'],
+  'atm-accessories': ['atm-and-accessories', 'atms', 'atm-signs'],
+  '/store/paper-ink': ['paper-and-ink', 'thermal-paper', 'bond-kitchen-2-ply-3-ply-paper', 'ink-ribbons'],
+  'paper-ink': ['paper-and-ink', 'thermal-paper', 'bond-kitchen-2-ply-3-ply-paper', 'ink-ribbons'],
+  '/store/accessories': ['accessories', 'cables'],
+  'accessories': ['accessories', 'cables'],
+  '/store/terminals': ['terminalpinpads', 'countertop-terminals', 'pin-pads', 'wireless', 'pax', 'dejavoo', 'ingenico', 'verifone', 'first-data', 'nexgo'],
+  'terminals': ['terminalpinpads', 'countertop-terminals', 'pin-pads', 'wireless', 'pax', 'dejavoo', 'ingenico', 'verifone', 'first-data', 'nexgo'],
+}
+
 function matchCategory(product, catPath) {
   if (!catPath || catPath === 'all' || catPath === '/store/all') return true
-  const text = (product.name + ' ' + (product.description || '') + ' ' + (product.category?.title || '') + ' ' + (product.category?.solution || '')).toLowerCase()
-
-  switch (catPath) {
-    case '/store/terminals':
-    case 'terminals':
-      return text.includes('pax') || text.includes('dejavoo') || text.includes('terminal') || text.includes('pin pad') || text.includes('ingenico') || text.includes('verifone') || product.category?.solution === 'credit-card'
-    case '/store/pos':
-    case 'pos':
-      return text.includes('pos') || text.includes('point of sale') || text.includes('station') || text.includes('register') || text.includes('touch') || product.category?.solution === 'pos'
-    case '/store/printers':
-    case 'printers':
-      return text.includes('printer') || text.includes('star') || text.includes('epson') || text.includes('tsp') || text.includes('print') || text.includes('receipt')
-    case '/store/barcode-scanners':
-    case 'barcode-scanners':
-      return text.includes('scanner') || text.includes('barcode') || text.includes('scan')
-    case '/store/atm-accessories':
-    case 'atm-accessories':
-      return text.includes('atm') || text.includes('hyosung') || text.includes('genmega') || text.includes('hantle') || text.includes('detect') || text.includes('cdu') || product.category?.solution === 'atm'
-    case '/store/clover':
-    case 'clover':
-      return text.includes('clover')
-    case '/store/accessories':
-    case 'accessories':
-      return text.includes('cable') || text.includes('stand') || text.includes('power') || text.includes('mount') || text.includes('adapter') || text.includes('swivel') || text.includes('bracket')
-    case '/store/pos-equipment':
-    case 'pos-equipment':
-      return text.includes('drawer') || text.includes('monitor') || text.includes('display') || text.includes('scale') || text.includes('cash drawer') || text.includes('terminal stand')
-    case '/store/paper-ink':
-    case 'paper-ink':
-      return text.includes('paper') || text.includes('roll') || text.includes('ribbon') || text.includes('ink') || text.includes('thermal')
-    default:
-      return true
-  }
+  const targetSlugs = categorySlugMap[catPath] || [catPath.replace('/store/', '')]
+  const pSlugs = (product.categories || []).map((c) => c.slug)
+  return targetSlugs.some((s) => pSlugs.includes(s))
 }
 
 function getRating(productId) {
@@ -346,12 +338,11 @@ function ProductCard({ product, onQuickView }) {
 }
 
 export default function ProductGrid({
-  products: fallbackProducts = [],
   categoryPath = '',
   categoryTitle = '',
 }) {
-  const [liveProducts, setLiveProducts] = useState([])
-  const [loading, setLoading] = useState(true)
+  const [liveProducts, setLiveProducts] = useState(wcStoreProducts)
+  const [loading, setLoading] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedCategory, setSelectedCategory] = useState(categoryPath || 'all')
   const [inStockOnly, setInStockOnly] = useState(false)
@@ -360,19 +351,14 @@ export default function ProductGrid({
 
   useEffect(() => {
     let isMounted = true
-    setLoading(true)
 
-    applicationRequest('item-services')
-      .then((result) => {
-        if (!isMounted) return
-        const raw = unwrapData(result)
-        const items = Array.isArray(raw) ? raw : raw?.data || []
+    fetchStoreProducts()
+      .then((items) => {
+        if (!isMounted || !items?.length) return
         setLiveProducts(items)
       })
       .catch(() => {
-        // Fallback to static props if network fails
-        if (!isMounted) return
-        setLiveProducts([])
+        // Keeps wcStoreProducts
       })
       .finally(() => {
         if (isMounted) setLoading(false)
@@ -392,14 +378,7 @@ export default function ProductGrid({
 
   // Process & filter products
   const displayProducts = useMemo(() => {
-    let pool = liveProducts.length > 0 ? liveProducts : fallbackProducts.map((p, idx) => ({
-      id: idx + 1,
-      name: p.name,
-      sellingPrice: parseFloat(String(p.price || '0').replace(/[^0-9.]/g, '')) || 0,
-      description: p.description,
-      inStock: true,
-      category: { title: categoryTitle || 'POS Store', solution: 'pos' },
-    }))
+    let pool = liveProducts && liveProducts.length > 0 ? liveProducts : wcStoreProducts
 
     // Filter by Category
     if (selectedCategory && selectedCategory !== 'all') {
@@ -433,10 +412,10 @@ export default function ProductGrid({
     }
 
     return sorted
-  }, [liveProducts, fallbackProducts, selectedCategory, inStockOnly, searchQuery, sortBy, categoryTitle])
+  }, [liveProducts, selectedCategory, inStockOnly, searchQuery, sortBy])
 
   return (
-    <div className="mt-16 border-t border-slate-200 pt-16">
+    <div id="pos-store-catalog" className="mt-16 scroll-mt-28 border-t border-slate-200 pt-16">
       {/* Header & Title */}
       <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
         <div className="max-w-2xl">
@@ -466,18 +445,19 @@ export default function ProductGrid({
       {/* Category Tabs Pill Navigation */}
       <div className="mt-8 flex gap-2 overflow-x-auto pb-2 scrollbar-none">
         {storeCategoryNav.map((cat) => {
-          const isActive = selectedCategory === cat.path || (cat.id === 'all' && (!selectedCategory || selectedCategory === 'all'))
+          const targetPath = cat.path || '/store'
+          const isActive = selectedCategory === cat.path || (cat.id === 'all' && (!selectedCategory || selectedCategory === 'all' || selectedCategory === '/store'))
           const Icon = cat.icon
           return (
-            <button
+            <Link
               key={cat.id}
-              type="button"
-              onClick={() => setSelectedCategory(cat.path || 'all')}
+              to={targetPath}
+              preventScrollReset={true}
               className={`flex shrink-0 items-center gap-2 rounded-xl border px-4 py-2.5 text-xs font-bold transition ${isActive ? 'border-primary bg-primary text-white shadow-sm' : 'border-slate-200 bg-white text-slate-700 hover:border-primary/50 hover:bg-slate-50'}`}
             >
               <Icon size={15} />
               <span>{cat.label}</span>
-            </button>
+            </Link>
           )
         })}
       </div>
@@ -498,6 +478,7 @@ export default function ProductGrid({
             <button
               type="button"
               onClick={() => setSearchQuery('')}
+              aria-label="Clear search"
               className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full p-1 text-slate-400 hover:bg-slate-200 hover:text-slate-700"
             >
               <X size={14} />

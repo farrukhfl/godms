@@ -706,12 +706,20 @@ function validate(step, values, selectedSolutions, plans, products, shipments, c
     ['ownerFirstName', 'ownerLastName', 'date', 'residentialAddress', 'ownerShipZip', 'ownerShipCity', 'ownerShipState', 'ownerPhoneNumber', 'ownerEmail', 'socialSecurityNumber'].forEach((key) => required(key, 'This field is required.'))
     if (digits(values.ownerPhoneNumber, 20).length < 10) errors.ownerPhoneNumber = 'Enter a valid 10-digit phone number.'
     if (digits(values.socialSecurityNumber, 20).length !== 9) errors.socialSecurityNumber = 'Enter a valid 9-digit Social Security number.'
-    if (!values.dLFiles.length) errors.dLFiles = 'Upload a driver license or government-issued ID.'
+    if (!values.dLFiles.length) {
+      errors.dLFiles = 'Upload a driver license or government-issued ID.'
+    } else if (values.dLFiles.some((f) => f.size > 10 * 1024 * 1024)) {
+      errors.dLFiles = 'Each ID file must be less than 10MB.'
+    }
   }
 
   if (step === 3) {
     ['accountNumber', 'routingNumber'].forEach((key) => required(key, 'This field is required.'))
-    if (!values.bankFiles.length) errors.bankFiles = 'Upload a void check or bank letter.'
+    if (!values.bankFiles.length) {
+      errors.bankFiles = 'Upload a void check or bank letter.'
+    } else if (values.bankFiles.some((f) => f.size > 10 * 1024 * 1024)) {
+      errors.bankFiles = 'Each bank document must be less than 10MB.'
+    }
     if (selectedSolutions.some((solution) => saleSolutions.has(solution))) {
       ['averageSale', 'maxSale', 'monthlySale'].forEach((key) => required(key, 'This field is required.'))
     }

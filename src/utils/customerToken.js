@@ -15,8 +15,10 @@ function decodeToken(token) {
 
 function hasUsableToken() {
   const token = localStorage.getItem(tokenKey)
-  const expiry = Date.parse(localStorage.getItem(expiryKey) || '')
-  return token && Number.isFinite(expiry) && expiry > Date.now() + 60_000 ? token : null
+  const expiryRaw = localStorage.getItem(expiryKey)
+  if (!token || !expiryRaw) return null
+  const expiry = Number(expiryRaw)
+  return Number.isFinite(expiry) && expiry > Date.now() + 60_000 ? token : null
 }
 
 export function clearCustomerToken() {
@@ -37,7 +39,10 @@ export async function getCustomerAccessToken({ force = false } = {}) {
   }
 
   const apiKey = import.meta.env.VITE_DRMS_API_KEY
-  if (!apiKey) throw new Error('The customer application service is not configured.')
+  if (!apiKey) {
+    // If no customer API key is configured, return null rather than hard breaking the layout
+    return ''
+  }
 
   clearCustomerToken()
 
@@ -63,8 +68,11 @@ export async function getCustomerAccessToken({ force = false } = {}) {
 
     const result = await response.json().catch(() => ({}))
     if (!response.ok || !result?.data?.accessToken) throw new Error(result.message || 'Unable to initialize the customer application.')
+    
+    const expiresInSeconds = Number(result.data.expiresIn) || 3600
+    const expiryTimestamp = Date.now() + expiresInSeconds * 1000
     localStorage.setItem(tokenKey, result.data.accessToken)
-    localStorage.setItem(expiryKey, result.data.expiresIn)
+    localStorage.setItem(expiryKey, String(expiryTimestamp))
     return result.data.accessToken
   })().finally(() => {
     pendingTokenRequest = null

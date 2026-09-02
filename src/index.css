@@ -431,8 +431,14 @@
   .mobile-menu-enter,
   .mobile-panel-enter,
   .nav-icon-enter,
-  .footer-glow {
-    animation: none;
+  .footer-glow,
+  .aurora-glow,
+  .radar-ping,
+  .hotspot-ring,
+  .sheen-active::after,
+  .card-image-sheen::after {
+    animation: none !important;
+    transition: none !important;
   }
 
   .mega-menu-enter { opacity: 1; transform: translateX(-50%); }

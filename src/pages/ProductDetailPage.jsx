@@ -17,7 +17,8 @@ import { Link, useParams } from 'react-router-dom'
 import Seo from '../components/Seo'
 import Button from '../components/ui/Button'
 import FormField, { formControlClasses } from '../components/ui/FormField'
-import { applicationRequest, placeOrder, unwrapData } from '../features/account-application/api'
+import { wcStoreProducts } from '../data/storeProducts'
+import { fetchStoreProducts, placeOrder, unwrapData } from '../features/account-application/api'
 import { getAllProductImages, getProductImageUrl } from '../utils/productImages'
 
 const states = [
@@ -302,6 +303,7 @@ function CheckoutModal({ product, quantity, isOpen, onClose }) {
           <button
             type="button"
             onClick={onClose}
+            aria-label="Close checkout modal"
             className="rounded-xl p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
           >
             <X size={20} />
@@ -397,6 +399,9 @@ function CheckoutModal({ product, quantity, isOpen, onClose }) {
                         <FormField id="phone" label="Phone Number" required error={errors.phone}>
                           <input
                             id="phone"
+                            type="tel"
+                            inputMode="numeric"
+                            autoComplete="tel"
                             value={customer.phone}
                             onChange={(e) => handleCustomerChange('phone', phoneFormat(e.target.value))}
                             placeholder="(555) 000-0000"
@@ -408,6 +413,7 @@ function CheckoutModal({ product, quantity, isOpen, onClose }) {
                       <FormField id="street" label="Street Address" required error={errors.street}>
                         <input
                           id="street"
+                          autoComplete="street-address"
                           value={customer.street}
                           onChange={(e) => handleCustomerChange('street', e.target.value)}
                           placeholder="123 Business St, Suite 100"
@@ -420,6 +426,7 @@ function CheckoutModal({ product, quantity, isOpen, onClose }) {
                           <FormField id="city" label="City" required error={errors.city}>
                             <input
                               id="city"
+                              autoComplete="address-level2"
                               value={customer.city}
                               onChange={(e) => handleCustomerChange('city', e.target.value)}
                               className={`${formControlClasses} ${errors.city ? 'border-rose-500' : ''}`}
@@ -430,6 +437,7 @@ function CheckoutModal({ product, quantity, isOpen, onClose }) {
                           <FormField id="state" label="State" required error={errors.state}>
                             <select
                               id="state"
+                              autoComplete="address-level1"
                               value={customer.state}
                               onChange={(e) => handleCustomerChange('state', e.target.value)}
                               className={`${formControlClasses} ${errors.state ? 'border-rose-500' : ''}`}
@@ -445,6 +453,9 @@ function CheckoutModal({ product, quantity, isOpen, onClose }) {
                           <FormField id="zip" label="ZIP Code" required error={errors.zip}>
                             <input
                               id="zip"
+                              type="text"
+                              inputMode="numeric"
+                              autoComplete="postal-code"
                               value={customer.zip}
                               onChange={(e) => handleCustomerChange('zip', digits(e.target.value, 5))}
                               placeholder="78701"
@@ -561,6 +572,9 @@ function CheckoutModal({ product, quantity, isOpen, onClose }) {
                         <div className="relative">
                           <input
                             id="cardNumber"
+                            type="text"
+                            inputMode="numeric"
+                            autoComplete="cc-number"
                             value={payment.cardNumber}
                             onChange={(e) => handlePaymentChange('cardNumber', formatCardNumber(e.target.value))}
                             placeholder="4111 1111 1111 1111"
@@ -579,6 +593,9 @@ function CheckoutModal({ product, quantity, isOpen, onClose }) {
                           </label>
                           <input
                             id="expirationDate"
+                            type="text"
+                            inputMode="numeric"
+                            autoComplete="cc-exp"
                             value={payment.expirationDate}
                             onChange={(e) => handlePaymentChange('expirationDate', formatExpiryInput(e.target.value))}
                             placeholder="12/30"
@@ -598,6 +615,8 @@ function CheckoutModal({ product, quantity, isOpen, onClose }) {
                           <input
                             id="cardCode"
                             type="password"
+                            inputMode="numeric"
+                            autoComplete="cc-csc"
                             value={payment.cardCode}
                             onChange={(e) => handlePaymentChange('cardCode', digits(e.target.value, 4))}
                             placeholder="123"
@@ -702,34 +721,36 @@ function CheckoutModal({ product, quantity, isOpen, onClose }) {
 
 export default function ProductDetailPage() {
   const { id } = useParams()
-  const [product, setProduct] = useState(null)
-  const [allProducts, setAllProducts] = useState([])
-  const [loading, setLoading] = useState(true)
+  const initialMatched = wcStoreProducts.find((item) => String(item.id) === String(id) || String(item.slug) === String(id)) || null
+  const [product, setProduct] = useState(initialMatched)
+  const [allProducts, setAllProducts] = useState(wcStoreProducts)
+  const [loading, setLoading] = useState(!initialMatched)
   const [quantity, setQuantity] = useState(1)
-  const [activeImage, setActiveImage] = useState('')
+  const [activeImage, setActiveImage] = useState(() => {
+    if (!initialMatched) return ''
+    const imgs = getAllProductImages(initialMatched)
+    return imgs[0] || getProductImageUrl(initialMatched) || ''
+  })
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false)
 
   useEffect(() => {
     let isMounted = true
-    setLoading(true)
 
-    applicationRequest('item-services')
-      .then((result) => {
-        if (!isMounted) return
-        const raw = unwrapData(result)
-        const items = Array.isArray(raw) ? raw : raw?.data || []
-        setAllProducts(items)
+    fetchStoreProducts()
+      .then((items) => {
+        if (!isMounted || !items?.length) return
+        const list = items || []
+        setAllProducts(list)
 
-        const matched = items.find((item) => String(item.id) === String(id))
-        setProduct(matched || null)
+        const matched = list.find((item) => String(item.id) === String(id) || String(item.slug) === String(id))
         if (matched) {
+          setProduct(matched)
           const images = getAllProductImages(matched)
           setActiveImage(images[0] || getProductImageUrl(matched) || '')
         }
       })
       .catch(() => {
-        if (!isMounted) return
-        setProduct(null)
+        // Keeps wcStoreProducts
       })
       .finally(() => {
         if (isMounted) setLoading(false)
@@ -749,9 +770,14 @@ export default function ProductDetailPage() {
   // Related products
   const relatedProducts = useMemo(() => {
     if (!product || !allProducts.length) return []
-    return allProducts
-      .filter((p) => String(p.id) !== String(product.id) && (p.category?.solution === product.category?.solution || p.categoryId === product.categoryId))
-      .slice(0, 4)
+    const prodCat = product.category?.title || product.categories?.[0]?.name || ''
+    const sameCat = allProducts.filter(
+      (p) => String(p.id) !== String(product.id) &&
+        (prodCat ? (p.category?.title === prodCat || p.categories?.[0]?.name === prodCat) : true)
+    )
+    if (sameCat.length >= 4) return sameCat.slice(0, 4)
+    const otherProducts = allProducts.filter((p) => String(p.id) !== String(product.id) && !sameCat.includes(p))
+    return [...sameCat, ...otherProducts].slice(0, 4)
   }, [product, allProducts])
 
   if (loading) {

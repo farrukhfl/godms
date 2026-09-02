@@ -1,4 +1,4 @@
-import { ArrowRight, CheckCircle2 } from 'lucide-react'
+import { ArrowRight, CheckCircle2, Store } from 'lucide-react'
 import Seo from '../components/Seo'
 import FAQAccordion from '../components/sections/FAQAccordion'
 import ProductGrid from '../components/sections/ProductGrid'
@@ -16,11 +16,13 @@ const fallbackBody = [
 
 const fallbackBenefits = ['Equipment selected for your payment environment', 'Compatibility guidance before purchase', 'Options for growing and established businesses', 'Support from payment technology specialists']
 
-export default function CategoryPageTemplate({ title, heroTitle, description, type, icon: Icon, body = fallbackBody, benefits = fallbackBenefits, metaDescription, products, categoryPath, heroImage, heroImageAlt, showPricingDisclosure = false, stats, featureSections, audience, faqs, faqTitle, faqDescription, showIndustryPosOffer = false }) {
+export default function CategoryPageTemplate({ title, heroTitle, description, type, icon: Icon, body = fallbackBody, benefits = fallbackBenefits, metaDescription, categoryPath, heroImage, heroImageAlt, showPricingDisclosure = false, stats, featureSections, audience, faqs, faqTitle, faqDescription, showIndustryPosOffer = false }) {
   const hasIndustryContent = featureSections?.length > 0
   const isIndustryPage = type === 'Industry solution'
   const isSolutionPage = type === 'Payment solution'
+  const isStoreCategory = type === 'POS store category' || String(categoryPath || '').startsWith('/store')
   const isAnimatedPage = isIndustryPage || isSolutionPage
+  const IconComponent = Icon || Store
 
   return (
     <>
@@ -30,7 +32,7 @@ export default function CategoryPageTemplate({ title, heroTitle, description, ty
         <div className="relative mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <div className={heroImage ? 'grid items-center gap-10 lg:grid-cols-[1.05fr_0.95fr] lg:gap-16' : 'max-w-3xl'}>
             <div>
-              <span className={`${isAnimatedPage ? 'hero-animate-1' : ''} mb-6 flex h-14 w-14 items-center justify-center rounded-2xl bg-primary text-white`}><Icon aria-hidden="true" size={28} /></span>
+              <span className={`${isAnimatedPage ? 'hero-animate-1' : ''} mb-6 flex h-14 w-14 items-center justify-center rounded-2xl bg-primary text-white`}><IconComponent aria-hidden="true" size={28} /></span>
               <p className={`${isAnimatedPage ? 'hero-animate-2' : ''} text-sm font-bold uppercase tracking-[0.2em] text-accent`}>{type}</p>
               <h1 className={`${isAnimatedPage ? 'hero-animate-2' : ''} mt-4 text-balance text-5xl font-extrabold tracking-tight sm:text-6xl`}>{heroTitle || title}</h1>
               <p className={`${isAnimatedPage ? 'hero-animate-3' : ''} mt-6 max-w-2xl text-lg leading-8 text-white/85`}>{description}</p>
@@ -39,8 +41,8 @@ export default function CategoryPageTemplate({ title, heroTitle, description, ty
             </div>
             {heroImage && (
               <div className="relative mx-auto w-full max-w-lg lg:ml-auto">
-                <div className="absolute -inset-4 -z-10 rounded-3xl bg-gradient-to-tr from-primary/30 via-accent/20 to-primary/10 blur-2xl" />
-                <div className="card-image-sheen relative overflow-hidden rounded-[2rem] border border-white/20 bg-slate-900/90 p-3 shadow-2xl shadow-navy/60 backdrop-blur-md group">
+                <div className="absolute -inset-4 -z-10 rounded-3xl bg-gradient-to-tr from-primary/40 via-cyan-400/25 to-primary/20 blur-2xl" />
+                <div className="card-image-sheen relative overflow-hidden rounded-[2rem] border-2 border-primary/60 bg-slate-900/95 p-3 shadow-[0_15px_50px_-10px_rgba(12,121,247,0.45)] ring-1 ring-primary/40 backdrop-blur-md group transition duration-500 hover:border-primary hover:shadow-[0_20px_60px_-10px_rgba(12,121,247,0.6)]">
                   <img
                     src={heroImage}
                     alt={heroImageAlt || title}
@@ -48,11 +50,11 @@ export default function CategoryPageTemplate({ title, heroTitle, description, ty
                     decoding="async"
                     width="900"
                     height="700"
-                    className={`${isAnimatedPage ? 'industry-hero-image' : ''} h-72 w-full rounded-2xl object-cover shadow-2xl transition duration-700 ease-out group-hover:scale-[1.03] sm:h-96`}
+                    className={`${isAnimatedPage ? 'industry-hero-image' : ''} h-72 w-full rounded-2xl object-cover shadow-2xl border border-primary/25 transition duration-700 ease-out group-hover:scale-[1.03] sm:h-96`}
                   />
                   <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-slate-950/40 via-transparent to-transparent" />
-                  <div className="absolute bottom-5 left-5 rounded-full border border-white/20 bg-slate-950/80 px-3.5 py-1.5 text-xs font-bold text-white shadow-lg backdrop-blur-md flex items-center gap-2">
-                    <span className="h-2 w-2 rounded-full bg-accent animate-pulse" />
+                  <div className="absolute bottom-5 left-5 rounded-full border border-primary/50 bg-slate-950/85 px-3.5 py-1.5 text-xs font-bold text-white shadow-lg backdrop-blur-md flex items-center gap-2">
+                    <span className="h-2 w-2 rounded-full bg-primary animate-pulse" />
                     Verified {type}
                   </div>
                 </div>
@@ -75,7 +77,7 @@ export default function CategoryPageTemplate({ title, heroTitle, description, ty
 
       {!hasIndustryContent && <section className="py-20 sm:py-24">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-          <div className={products ? 'max-w-3xl' : 'grid gap-12 lg:grid-cols-[1.2fr_0.8fr] lg:gap-20'}>
+          <div className={isStoreCategory ? 'max-w-3xl' : 'grid gap-12 lg:grid-cols-[1.2fr_0.8fr] lg:gap-20'}>
             <div>
               <p className="text-sm font-bold uppercase tracking-[0.2em] text-primary">Designed around your business</p>
               <h2 className="mt-3 text-3xl font-extrabold tracking-tight text-navy sm:text-4xl">A practical path to better payments</h2>
@@ -83,7 +85,7 @@ export default function CategoryPageTemplate({ title, heroTitle, description, ty
                 {body.map((paragraph) => <p key={paragraph}>{paragraph}</p>)}
               </div>
             </div>
-            {!products && <aside className="h-fit rounded-2xl border border-primary/15 bg-mist p-6 sm:p-8">
+            {!isStoreCategory && <aside className="h-fit rounded-2xl border border-primary/15 bg-mist p-6 sm:p-8">
               <h2 className="text-2xl font-extrabold text-navy">Key benefits</h2>
               <ul className="mt-6 space-y-4">
                 {benefits.map((benefit) => (
@@ -96,7 +98,7 @@ export default function CategoryPageTemplate({ title, heroTitle, description, ty
               <Button to="/open-an-account" className="mt-8 w-full">Open an account <ArrowRight aria-hidden="true" size={18} /></Button>
             </aside>}
           </div>
-          {products && <ProductGrid products={products} categoryPath={categoryPath} categoryTitle={title} />}
+          {isStoreCategory && <ProductGrid categoryPath={categoryPath} categoryTitle={title} />}
         </div>
       </section>}
 

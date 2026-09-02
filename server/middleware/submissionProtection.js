@@ -13,7 +13,8 @@ export const submissionLimiter = rateLimit({
 })
 
 export function rejectBotsSilently(req, res, next) {
-  if (typeof req.body?.website === 'string' && req.body.website.trim()) {
+  // Check designated honeypot field without conflicting with legitimate business website fields
+  if (typeof req.body?._hp_confirm === 'string' && req.body._hp_confirm.trim()) {
     return res.status(200).json({ success: true, message: 'Submission received.' })
   }
 

@@ -9,7 +9,14 @@ import { solutions } from '../data/navigation'
 import { siteConfig } from '../data/siteConfig'
 import { postForm } from '../utils/api'
 
-const initialValues = { name: '', businessName: '', email: '', service: '', message: '' }
+const initialValues = { name: '', businessName: '', email: '', phone: '', service: '', message: '' }
+
+function phoneFormat(value) {
+  const number = String(value || '').replace(/\D/g, '').slice(0, 10)
+  if (number.length < 4) return number
+  if (number.length < 7) return `(${number.slice(0, 3)}) ${number.slice(3)}`
+  return `(${number.slice(0, 3)}) ${number.slice(3, 6)}-${number.slice(6)}`
+}
 
 function validate(values) {
   const errors = {}
@@ -17,6 +24,8 @@ function validate(values) {
   if (!values.businessName.trim()) errors.businessName = 'Please enter your business name.'
   if (!values.email.trim()) errors.email = 'Please enter your email address.'
   else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(values.email)) errors.email = 'Enter a valid email address.'
+  if (!values.phone.trim()) errors.phone = 'Please enter your phone number.'
+  else if (values.phone.replace(/\D/g, '').length < 10) errors.phone = 'Enter a valid phone number with at least 10 digits.'
   if (!values.service) errors.service = 'Select the service you are interested in.'
   if (!values.message.trim()) errors.message = 'Tell us a little about what your business needs.'
   return errors
@@ -31,7 +40,8 @@ export default function ContactPage() {
 
   function handleChange(event) {
     const { name, value } = event.target
-    setValues((current) => ({ ...current, [name]: value }))
+    const updatedValue = name === 'phone' ? phoneFormat(value) : value
+    setValues((current) => ({ ...current, [name]: updatedValue }))
     if (errors[name]) setErrors((current) => ({ ...current, [name]: '' }))
     if (submitError) setSubmitError('')
   }
@@ -50,11 +60,13 @@ export default function ContactPage() {
 
     try {
       await postForm('/contact-inquiry', {
-        name: values.name,
-        email: values.email,
-        businessName: values.businessName,
-        message: values.message,
+        name: values.name.trim(),
+        email: values.email.trim(),
+        phone: values.phone.trim(),
+        businessName: values.businessName.trim(),
+        message: values.message.trim(),
         service: values.service,
+        solution: values.service,
       })
       setSubmitted(true)
     } catch (error) {
@@ -105,6 +117,9 @@ export default function ContactPage() {
                   </FormField>
                   <FormField id="email" label="Email" error={errors.email} required>
                     <input id="email" name="email" type="email" autoComplete="email" required placeholder="you@business.com" value={values.email} onChange={handleChange} aria-invalid={Boolean(errors.email)} aria-describedby={errors.email ? 'email-error' : undefined} className={`${formControlClasses} ${errors.email ? 'border-rose-500' : ''}`} />
+                  </FormField>
+                  <FormField id="phone" label="Phone Number" error={errors.phone} required>
+                    <input id="phone" name="phone" type="tel" inputMode="numeric" autoComplete="tel" required placeholder="(555) 000-0000" value={values.phone} onChange={handleChange} aria-invalid={Boolean(errors.phone)} aria-describedby={errors.phone ? 'phone-error' : undefined} className={`${formControlClasses} ${errors.phone ? 'border-rose-500' : ''}`} />
                   </FormField>
                 </div>
                 <div className="mt-6">

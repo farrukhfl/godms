@@ -1,11 +1,3 @@
-/*
- * CONFIRM BEFORE LAUNCH:
- * - The live site also shows 888-696-0939 and info@godms.com in some footer
- *   instances. This rebuild consistently uses the staffed Contact page sales
- *   line (888-696-1049) and sales@godms.com until the discrepancy is resolved.
- * - Address fields remain placeholders.
- * - Confirm company.legalName against the registered business entity.
- */
 export const siteConfig = {
   company: {
     fullName: 'Dolphin Merchant Services',
@@ -29,10 +21,10 @@ export const siteConfig = {
   },
   signInUrl: '/sign-in',
   address: {
-    street: '100 Placeholder Plaza, Suite 200',
-    city: 'Sample City',
-    state: 'NY',
-    postalCode: '10000',
+    street: '200 W Madison St, Suite 2100',
+    city: 'Chicago',
+    state: 'IL',
+    postalCode: '60606',
     country: 'United States',
   },
 }

@@ -1,5 +1,4 @@
 import { ArrowRight, Check, CheckCircle2, CreditCard, ShieldCheck, Sparkles, TrendingUp, Zap } from 'lucide-react'
-import { siteConfig } from '../../data/siteConfig'
 import Button from '../ui/Button'
 import PricingDisclosure from '../ui/PricingDisclosure'
 
@@ -43,48 +42,27 @@ export default function Hero() {
           <PricingDisclosure className="hero-animate-5 mt-5 max-w-lg" />
         </div>
 
-        {/* Right Hero Image Showcase with Eye-Catching Multi-Layered FX */}
-        <div className="hero-dashboard relative mx-auto w-full max-w-2xl pb-8 lg:ml-auto">
-          {/* Dynamic Rotating Aurora Halo Effect */}
-          <div className="aurora-glow absolute -inset-8 -z-10 rounded-[3.5rem] bg-gradient-to-tr from-primary/35 via-cyan-400/25 to-accent/30 blur-3xl opacity-80" />
-          <div className="absolute -left-12 top-10 -z-10 h-52 w-52 rounded-full bg-accent/35 blur-3xl" />
-          <div className="absolute -right-10 bottom-6 -z-10 h-56 w-56 rounded-full bg-primary/30 blur-3xl" />
+        {/* Right Hero Image Showcase with Transparent Floating Hardware */}
+        <div className="hero-dashboard relative mx-auto w-full max-w-2xl pb-8 lg:ml-auto flex items-center justify-center">
+          {/* Dynamic Soft Ambient Glow Behind Device */}
+          <div className="aurora-glow absolute -inset-6 -z-10 rounded-full bg-gradient-to-tr from-primary/25 via-cyan-400/20 to-accent/20 blur-3xl opacity-80" />
+          <div className="absolute -left-10 top-10 -z-10 h-48 w-48 rounded-full bg-accent/25 blur-3xl" />
+          <div className="absolute -right-8 bottom-6 -z-10 h-48 w-48 rounded-full bg-primary/20 blur-3xl" />
 
-          {/* Elevated Hardware Screen Display */}
-          <div className="group relative overflow-hidden rounded-[2.5rem] border-[9px] border-slate-900 bg-slate-950 p-2.5 shadow-[0_25px_70px_-15px_rgba(12,121,247,0.45)] ring-1 ring-white/20 transition duration-700 hover:shadow-[0_30px_90px_-10px_rgba(12,121,247,0.6)] sm:p-3.5">
-            {/* Top Device Status Bar */}
-            <div className="flex items-center justify-between rounded-t-[1.75rem] bg-slate-900/95 px-4 py-2.5 text-xs font-semibold text-slate-300 border-b border-slate-800/80">
-              <div className="flex items-center gap-2">
-                <span className="h-2.5 w-2.5 rounded-full bg-rose-500" />
-                <span className="h-2.5 w-2.5 rounded-full bg-amber-400" />
-                <span className="h-2.5 w-2.5 rounded-full bg-emerald-400" />
-                <span className="ml-2 font-mono text-[11px] tracking-wider text-slate-300 font-bold">{siteConfig.company.posName.toUpperCase()} 4.0</span>
-              </div>
-              <div className="flex items-center gap-2.5">
-                <span className="relative flex h-2 w-2">
-                  <span className="radar-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
-                  <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-400" />
-                </span>
-                <span className="text-[10px] font-extrabold uppercase tracking-widest text-emerald-400">ONLINE</span>
-              </div>
-            </div>
-
-            {/* Screen Image with Active Sheen Light Sweep */}
-            <div className="sheen-active card-image-sheen relative overflow-hidden rounded-b-[1.75rem] rounded-t-lg bg-slate-900">
-              <img
-                src="/homepage-images/pos-screen.png"
-                alt="Dolphin POS interactive touchscreen software and merchant dashboard"
-                width="955"
-                height="703"
-                className="h-auto w-full object-cover transition duration-700 ease-out group-hover:scale-[1.03]"
-              />
-              <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-slate-950/40 via-transparent to-transparent" />
-            </div>
+          {/* Clean Transparent Hardware Image */}
+          <div className="group relative z-10 w-full flex items-center justify-center py-6">
+            <img
+              src="/homepage-images/pos-screen.png"
+              alt="Dolphin POS interactive touchscreen workstation and merchant software"
+              width="955"
+              height="703"
+              className="h-auto max-h-[500px] w-auto object-contain drop-shadow-[0_25px_45px_rgba(12,121,247,0.22)] drop-shadow-[0_15px_30px_rgba(0,0,0,0.18)] transition duration-700 ease-out group-hover:scale-[1.03]"
+            />
           </div>
 
           {/* Floating Glassmorphic ROI Badges */}
           {/* Badge 1: Top-Left (Instant Setup) */}
-          <div className="floating-badge absolute -left-4 -top-6 z-20 flex items-center gap-3 rounded-2xl border border-white/90 bg-white/95 p-3.5 shadow-2xl shadow-navy/20 backdrop-blur-md sm:-left-8 sm:p-4 hover:scale-105 transition duration-300">
+          <div className="floating-badge absolute -left-4 -top-2 z-20 flex items-center gap-3 rounded-2xl border border-white/90 bg-white/95 p-3.5 shadow-2xl shadow-navy/15 backdrop-blur-md sm:-left-8 sm:p-4 hover:scale-105 transition duration-300">
             <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-tr from-primary to-cyan-500 text-white shadow-lg shadow-primary/30">
               <Zap aria-hidden="true" size={22} className="animate-pulse" />
             </span>
@@ -98,7 +76,7 @@ export default function Hero() {
           </div>
 
           {/* Badge 2: Top-Right (Dual Pricing) */}
-          <div className="floating-badge-alt absolute -right-3 -top-5 z-20 flex items-center gap-3 rounded-2xl border border-white/90 bg-white/95 p-3.5 shadow-2xl shadow-navy/20 backdrop-blur-md sm:-right-6 sm:p-4 hover:scale-105 transition duration-300">
+          <div className="floating-badge-alt absolute -right-3 -top-2 z-20 flex items-center gap-3 rounded-2xl border border-white/90 bg-white/95 p-3.5 shadow-2xl shadow-navy/15 backdrop-blur-md sm:-right-6 sm:p-4 hover:scale-105 transition duration-300">
             <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-tr from-accent to-emerald-400 text-navy shadow-lg shadow-accent/30 font-black">
               <CreditCard aria-hidden="true" size={22} />
             </span>
@@ -109,7 +87,7 @@ export default function Hero() {
           </div>
 
           {/* Badge 3: Bottom-Left (Security Guarantee) */}
-          <div className="floating-badge-delayed absolute -bottom-5 -left-3 z-20 hidden items-center gap-3 rounded-2xl border border-white/90 bg-white/95 p-3.5 shadow-2xl shadow-navy/20 backdrop-blur-md min-[400px]:flex sm:-left-6 sm:p-4 hover:scale-105 transition duration-300">
+          <div className="floating-badge-delayed absolute -bottom-3 -left-3 z-20 hidden items-center gap-3 rounded-2xl border border-white/90 bg-white/95 p-3.5 shadow-2xl shadow-navy/15 backdrop-blur-md min-[400px]:flex sm:-left-6 sm:p-4 hover:scale-105 transition duration-300">
             <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-emerald-100 text-emerald-700 shadow-sm">
               <ShieldCheck aria-hidden="true" size={22} />
             </span>
@@ -120,7 +98,7 @@ export default function Hero() {
           </div>
 
           {/* Badge 4: Bottom-Right (Launch Offer) */}
-          <div className="floating-badge absolute -bottom-6 right-2 z-20 flex items-center gap-3.5 rounded-2xl border border-white/80 bg-navy/95 p-3.5 text-white shadow-2xl shadow-navy/40 backdrop-blur-md sm:-right-4 sm:p-4 hover:scale-105 transition duration-300">
+          <div className="floating-badge absolute -bottom-3 right-2 z-20 flex items-center gap-3.5 rounded-2xl border border-white/80 bg-navy/95 p-3.5 text-white shadow-2xl shadow-navy/30 backdrop-blur-md sm:-right-4 sm:p-4 hover:scale-105 transition duration-300">
             <div className="text-right">
               <p className="text-[10px] font-bold uppercase tracking-wider text-accent">Limited Time Offer</p>
               <p className="text-base font-black text-white">$0 Upfront Hardware</p>
@@ -131,9 +109,9 @@ export default function Hero() {
           </div>
 
           {/* Center Floating Live Sales Pill */}
-          <div className="floating-badge-alt absolute bottom-10 left-1/2 -translate-x-1/2 z-20 hidden sm:flex items-center gap-2 rounded-full border border-white/60 bg-slate-950/85 px-4 py-2 text-xs font-bold text-white shadow-xl backdrop-blur-md">
-            <TrendingUp aria-hidden="true" size={15} className="text-emerald-400" />
-            <span>Today&apos;s Net Sales: <strong className="text-emerald-400 font-extrabold">$8,462.90</strong> (+18.4%)</span>
+          <div className="floating-badge-alt absolute bottom-8 left-1/2 -translate-x-1/2 z-20 hidden sm:flex items-center gap-2 rounded-full border border-slate-200/80 bg-white/95 px-4 py-2 text-xs font-bold text-navy shadow-xl backdrop-blur-md">
+            <TrendingUp aria-hidden="true" size={15} className="text-emerald-500" />
+            <span>Today&apos;s Net Sales: <strong className="text-emerald-600 font-extrabold">$8,462.90</strong> (+18.4%)</span>
           </div>
         </div>
       </div>

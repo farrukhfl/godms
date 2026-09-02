@@ -1,4 +1,6 @@
 import { clearCustomerToken, getCustomerAccessToken, getCustomerAgentId } from '../../utils/customerToken'
+import { wcStoreProducts } from '../../data/storeProducts'
+import { getProductImageUrl } from '../../utils/productImages'
 
 const primaryUrl = (import.meta.env.VITE_DRMS_API_BASE_URL || 'https://pos.gotmsolutions.com/api').replace(/\/$/, '')
 const fallbackUrl = 'https://pos.gotmsolutions.com/api'
@@ -165,6 +167,53 @@ export async function placeOrder(orderPayload) {
     method: 'POST',
     body: orderPayload,
   })
+}
+
+export async function fetchStoreProducts() {
+  try {
+    const urls = [
+      '/testing-shop/wp-json/wc/store/v1/products?per_page=100',
+      'https://testing.godms.com/wp-json/wc/store/v1/products?per_page=100',
+    ]
+
+    for (const url of urls) {
+      try {
+        const response = await fetch(url)
+        if (response.ok) {
+          const raw = await response.json()
+          if (Array.isArray(raw) && raw.length > 0) {
+            return raw.map((p) => {
+              const rawPrice = p.prices?.price ? (parseInt(p.prices.price, 10) / (10 ** (p.prices.currency_minor_unit || 2))) : 0
+              const regularPrice = p.prices?.regular_price ? (parseInt(p.prices.regular_price, 10) / (10 ** (p.prices.currency_minor_unit || 2))) : rawPrice
+              const catName = p.categories?.[0]?.name || 'Point of Sale (POS)'
+              return {
+                id: p.id,
+                name: p.name,
+                sellingPrice: rawPrice,
+                price: rawPrice,
+                regularPrice: regularPrice > rawPrice ? regularPrice : null,
+                description: (p.short_description || p.description || '').replace(/<[^>]*>?/gm, '').trim(),
+                images: p.images || [],
+                fileUrl: p.images?.[0]?.src || null,
+                imageUrl: getProductImageUrl(p),
+                inStock: p.is_in_stock ?? true,
+                category: { title: catName, solution: 'pos' },
+                categories: p.categories || [],
+                sku: p.sku || `DMS-${p.id}`,
+                slug: p.slug || '',
+              }
+            })
+          }
+        }
+      } catch {
+        // try next endpoint or fallback to bundled catalog
+      }
+    }
+  } catch {
+    // fallback
+  }
+
+  return wcStoreProducts
 }
 
 export async function submitAgentRequest(agentData) {

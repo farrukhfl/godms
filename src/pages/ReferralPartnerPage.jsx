@@ -1,4 +1,4 @@
-import { ArrowRight, Building2, CheckCircle2, Landmark, ShoppingBag, Utensils } from 'lucide-react'
+import { ArrowRight, Building2, CheckCircle2, Landmark, LoaderCircle, ShoppingBag, Utensils } from 'lucide-react'
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import Seo from '../components/Seo'
@@ -7,6 +7,7 @@ import Card from '../components/ui/Card'
 import FormField, { formControlClasses } from '../components/ui/FormField'
 import Reveal from '../components/ui/Reveal'
 import SectionHeading from '../components/ui/SectionHeading'
+import { postForm } from '../utils/api'
 
 const sources = ['Existing client', 'Online search', 'Social media', 'Online ad', 'Word of mouth', 'Other']
 const services = ['Payment Processing', 'Dolphin POS', 'Other POS Systems', 'Merchant Cash Advance', 'EBT/SNAP Processing', 'ACH Processing', 'ATM Placements', 'AirVac Placements', 'Web 360+']
@@ -22,6 +23,13 @@ const industries = [
   { icon: Landmark, title: 'Government', text: 'Public-facing departments modernizing collections.' },
 ]
 const initialValues = { firstName: '', lastName: '', phone: '', email: '', companyName: '', companyWebsite: '', source: '', service: '', consent: false }
+
+function phoneFormat(value) {
+  const number = String(value || '').replace(/\D/g, '').slice(0, 10)
+  if (number.length < 4) return number
+  if (number.length < 7) return `(${number.slice(0, 3)}) ${number.slice(3)}`
+  return `(${number.slice(0, 3)}) ${number.slice(3, 6)}-${number.slice(6)}`
+}
 
 function validate(values) {
   const errors = {}
@@ -42,14 +50,18 @@ export default function ReferralPartnerPage() {
   const [values, setValues] = useState(initialValues)
   const [errors, setErrors] = useState({})
   const [submitted, setSubmitted] = useState(false)
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [submitError, setSubmitError] = useState('')
 
   function handleChange(event) {
     const { name, value, checked, type } = event.target
-    setValues((current) => ({ ...current, [name]: type === 'checkbox' ? checked : value }))
+    const updatedValue = name === 'phone' ? phoneFormat(value) : (type === 'checkbox' ? checked : value)
+    setValues((current) => ({ ...current, [name]: updatedValue }))
     if (errors[name]) setErrors((current) => ({ ...current, [name]: '' }))
+    if (submitError) setSubmitError('')
   }
 
-  function handleSubmit(event) {
+  async function handleSubmit(event) {
     event.preventDefault()
     const nextErrors = validate(values)
     setErrors(nextErrors)
@@ -57,12 +69,34 @@ export default function ReferralPartnerPage() {
       requestAnimationFrame(() => document.getElementById(`referral-${Object.keys(nextErrors)[0]}`)?.focus())
       return
     }
-    setSubmitted(true)
+
+    setIsSubmitting(true)
+    setSubmitError('')
+
+    try {
+      await postForm('/referral', {
+        firstName: values.firstName.trim(),
+        lastName: values.lastName.trim(),
+        phone: values.phone.trim(),
+        email: values.email.trim(),
+        companyName: values.companyName.trim(),
+        companyWebsite: values.companyWebsite.trim(),
+        source: values.source,
+        service: values.service,
+        consent: values.consent,
+      })
+      setSubmitted(true)
+    } catch (err) {
+      setSubmitError(err.message || 'Failed to submit referral. Please try again.')
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
   function resetForm() {
     setValues(initialValues)
     setErrors({})
+    setSubmitError('')
     setSubmitted(false)
   }
 
@@ -115,10 +149,11 @@ export default function ReferralPartnerPage() {
               <p className="mt-3 max-w-md leading-7 text-slate-600">Your partner interest has been recorded. A DMS team member can follow up with the program details and referral process.</p>
               <Button variant="outline" className="mt-7" onClick={resetForm}>Submit another request</Button>
             </div> : <form onSubmit={handleSubmit} noValidate>
+              {submitError && <p role="alert" className="mb-6 rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm font-semibold text-rose-700">{submitError}</p>}
               <div className="grid gap-6 sm:grid-cols-2">
                 <FormField id="referral-firstName" label="First Name" error={errors.firstName} required><input id="referral-firstName" name="firstName" autoComplete="given-name" value={values.firstName} onChange={handleChange} className={`${formControlClasses} ${errors.firstName ? 'border-rose-500' : ''}`} /></FormField>
                 <FormField id="referral-lastName" label="Last Name" error={errors.lastName} required><input id="referral-lastName" name="lastName" autoComplete="family-name" value={values.lastName} onChange={handleChange} className={`${formControlClasses} ${errors.lastName ? 'border-rose-500' : ''}`} /></FormField>
-                <FormField id="referral-phone" label="Phone" error={errors.phone} required><input id="referral-phone" name="phone" type="tel" autoComplete="tel" value={values.phone} onChange={handleChange} className={`${formControlClasses} ${errors.phone ? 'border-rose-500' : ''}`} /></FormField>
+                <FormField id="referral-phone" label="Phone" error={errors.phone} required><input id="referral-phone" name="phone" type="tel" inputMode="numeric" autoComplete="tel" placeholder="(555) 000-0000" value={values.phone} onChange={handleChange} className={`${formControlClasses} ${errors.phone ? 'border-rose-500' : ''}`} /></FormField>
                 <FormField id="referral-email" label="Email" error={errors.email} required><input id="referral-email" name="email" type="email" autoComplete="email" value={values.email} onChange={handleChange} className={`${formControlClasses} ${errors.email ? 'border-rose-500' : ''}`} /></FormField>
                 <FormField id="referral-companyName" label="Company Name" error={errors.companyName} required><input id="referral-companyName" name="companyName" autoComplete="organization" value={values.companyName} onChange={handleChange} className={`${formControlClasses} ${errors.companyName ? 'border-rose-500' : ''}`} /></FormField>
                 <FormField id="referral-companyWebsite" label="Company Website"><input id="referral-companyWebsite" name="companyWebsite" type="url" placeholder="https://" value={values.companyWebsite} onChange={handleChange} className={formControlClasses} /></FormField>
@@ -130,8 +165,10 @@ export default function ReferralPartnerPage() {
                 <span>I consent to DMS using this information to contact me about the referral program and acknowledge the <Link to="/privacy-policy" className="font-bold text-primary underline">Privacy Policy</Link>.</span>
               </label>
               {errors.consent && <p id="referral-consent-error" className="mt-2 text-sm font-semibold text-rose-600">{errors.consent}</p>}
-              <Button type="submit" className="mt-7">Become a Referral Partner <ArrowRight aria-hidden="true" size={18} /></Button>
-              <p className="mt-4 text-xs leading-5 text-slate-500">This demonstration form validates locally and does not transmit personal information.</p>
+              <Button type="submit" disabled={isSubmitting} className="mt-7">
+                {isSubmitting ? <><LoaderCircle className="animate-spin" size={18} /> Submitting Referral...</> : <>Become a Referral Partner <ArrowRight aria-hidden="true" size={18} /></>}
+              </Button>
+              <p className="mt-4 text-xs leading-5 text-slate-500">Your information is transmitted securely to our partner success team.</p>
             </form>}
           </Reveal>
         </div>

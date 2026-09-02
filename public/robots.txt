@@ -1,5 +1,4 @@
 User-agent: *
 Allow: /
 
-# Replace this placeholder domain before launch.
-Sitemap: https://www.example.com/sitemap.xml
+Sitemap: https://godms.com/sitemap.xml

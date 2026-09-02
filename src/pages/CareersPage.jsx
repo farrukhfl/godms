@@ -1,4 +1,4 @@
-import { ArrowRight, CheckCircle2, FileText, Mail, MapPin, Phone, ShieldCheck } from 'lucide-react'
+import { ArrowRight, CheckCircle2, FileText, LoaderCircle, Mail, MapPin, Phone, ShieldCheck } from 'lucide-react'
 import { useState } from 'react'
 import Seo from '../components/Seo'
 import Button from '../components/ui/Button'
@@ -7,6 +7,7 @@ import FormField, { formControlClasses } from '../components/ui/FormField'
 import Reveal from '../components/ui/Reveal'
 import SectionHeading from '../components/ui/SectionHeading'
 import { siteConfig } from '../data/siteConfig'
+import { postForm } from '../utils/api'
 
 const work = [
   ['Credit & Debit Card Processing', 'Build dependable acceptance experiences across in-person and digital channels.'],
@@ -21,6 +22,13 @@ const hiringSteps = ['Application Received', 'Application Shortlisted', 'Online 
 const benefits = ['Competitive Salary', 'Performance Bonuses', 'Project-based Incentives', 'Professional Development Opportunities', 'Training & Growth', 'Supportive Culture', 'Remote Flexibility']
 const initialValues = { name: '', email: '', phone: '', resume: null, message: '' }
 
+function phoneFormat(value) {
+  const number = String(value || '').replace(/\D/g, '').slice(0, 10)
+  if (number.length < 4) return number
+  if (number.length < 7) return `(${number.slice(0, 3)}) ${number.slice(3)}`
+  return `(${number.slice(0, 3)}) ${number.slice(3, 6)}-${number.slice(6)}`
+}
+
 function validate(values) {
   const errors = {}
   if (!values.name.trim()) errors.name = 'Please enter your name.'
@@ -29,6 +37,7 @@ function validate(values) {
   if (!values.phone.trim()) errors.phone = 'Please enter your phone number.'
   else if (values.phone.replace(/\D/g, '').length < 10) errors.phone = 'Enter a valid phone number with at least 10 digits.'
   if (!values.resume) errors.resume = 'Please choose a resume file.'
+  else if (values.resume.size > 10 * 1024 * 1024) errors.resume = 'Resume file size must be less than 10MB.'
   if (!values.message.trim()) errors.message = 'Tell us briefly about the work that interests you.'
   return errors
 }
@@ -37,14 +46,18 @@ export default function CareersPage() {
   const [values, setValues] = useState(initialValues)
   const [errors, setErrors] = useState({})
   const [submitted, setSubmitted] = useState(false)
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [submitError, setSubmitError] = useState('')
 
   function handleChange(event) {
     const { name, value, files } = event.target
-    setValues((current) => ({ ...current, [name]: files ? files[0] || null : value }))
+    const updatedValue = name === 'phone' ? phoneFormat(value) : (files ? files[0] || null : value)
+    setValues((current) => ({ ...current, [name]: updatedValue }))
     if (errors[name]) setErrors((current) => ({ ...current, [name]: '' }))
+    if (submitError) setSubmitError('')
   }
 
-  function handleSubmit(event) {
+  async function handleSubmit(event) {
     event.preventDefault()
     const nextErrors = validate(values)
     setErrors(nextErrors)
@@ -52,12 +65,30 @@ export default function CareersPage() {
       requestAnimationFrame(() => document.getElementById(`career-${Object.keys(nextErrors)[0]}`)?.focus())
       return
     }
-    setSubmitted(true)
+
+    setIsSubmitting(true)
+    setSubmitError('')
+
+    try {
+      await postForm('/careers', {
+        name: values.name.trim(),
+        email: values.email.trim(),
+        phone: values.phone.trim(),
+        message: values.message.trim(),
+        resumeFileName: values.resume?.name || 'resume.pdf',
+      })
+      setSubmitted(true)
+    } catch (err) {
+      setSubmitError(err.message || 'Failed to submit application. Please try again.')
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
   function resetForm() {
     setValues(initialValues)
     setErrors({})
+    setSubmitError('')
     setSubmitted(false)
   }
 
@@ -124,10 +155,10 @@ export default function CareersPage() {
           <Reveal direction="left" as="aside">
             <p className="text-sm font-bold uppercase tracking-[0.2em] text-primary">Work at DMS</p>
             <h2 className="mt-3 text-4xl font-extrabold text-navy">Bring your next chapter to commerce.</h2>
-            <p className="mt-5 leading-7 text-slate-600">Share your background and the kind of role you are looking for. This general-interest form records a local demo submission and does not upload the selected file.</p>
+            <p className="mt-5 leading-7 text-slate-600">Share your background and the kind of role you are looking for. Our recruitment team reviews every profile and reaches out regarding matching openings.</p>
             <div className="mt-8 space-y-4 text-sm text-slate-600">
               <p className="flex items-center gap-3"><Phone aria-hidden="true" className="text-primary" size={19} /><a href={siteConfig.phone.href}>{siteConfig.phone.display}</a></p>
-              <p className="flex min-w-0 items-center gap-3"><Mail aria-hidden="true" className="shrink-0 text-primary" size={19} /><a href="mailto:careers@dolphinmerchantservices.com" className="min-w-0 break-all">careers@dolphinmerchantservices.com</a></p>
+              <p className="flex min-w-0 items-center gap-3"><Mail aria-hidden="true" className="shrink-0 text-primary" size={19} /><a href={`mailto:${siteConfig.email}`} className="min-w-0 break-all">{siteConfig.email}</a></p>
               <p className="flex items-center gap-3"><MapPin aria-hidden="true" className="text-primary" size={19} />Chicago, IL + remote</p>
             </div>
           </Reveal>
@@ -135,19 +166,22 @@ export default function CareersPage() {
           <Reveal direction="right" delay={140} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-soft sm:p-8">
             {submitted ? <div className="flex min-h-[430px] flex-col items-center justify-center text-center" role="status">
               <span className="flex h-16 w-16 items-center justify-center rounded-full bg-emerald-100 text-emerald-700"><CheckCircle2 aria-hidden="true" size={32} /></span>
-              <h2 className="mt-6 text-3xl font-extrabold text-navy">Your interest is recorded.</h2>
-              <p className="mt-3 max-w-md leading-7 text-slate-600">Thanks for considering DMS. Our careers team can use the details you provided to start a conversation about potential opportunities.</p>
+              <h2 className="mt-6 text-3xl font-extrabold text-navy">Your profile is submitted.</h2>
+              <p className="mt-3 max-w-md leading-7 text-slate-600">Thanks for considering Dolphin Merchant Services. Our talent team will review your qualifications and contact you about relevant opportunities.</p>
               <Button variant="outline" className="mt-7" onClick={resetForm}>Submit another profile</Button>
             </div> : <form onSubmit={handleSubmit} noValidate>
+              {submitError && <p role="alert" className="mb-6 rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm font-semibold text-rose-700">{submitError}</p>}
               <div className="grid gap-6 sm:grid-cols-2">
                 <FormField id="career-name" label="Name" error={errors.name} required><input id="career-name" name="name" autoComplete="name" value={values.name} onChange={handleChange} className={`${formControlClasses} ${errors.name ? 'border-rose-500' : ''}`} /></FormField>
                 <FormField id="career-email" label="Email" error={errors.email} required><input id="career-email" name="email" type="email" autoComplete="email" value={values.email} onChange={handleChange} className={`${formControlClasses} ${errors.email ? 'border-rose-500' : ''}`} /></FormField>
-                <FormField id="career-phone" label="Phone" error={errors.phone} required><input id="career-phone" name="phone" type="tel" autoComplete="tel" value={values.phone} onChange={handleChange} className={`${formControlClasses} ${errors.phone ? 'border-rose-500' : ''}`} /></FormField>
-                <FormField id="career-resume" label="Resume" error={errors.resume} required><label className={`${formControlClasses} flex cursor-pointer items-center gap-3`}><FileText aria-hidden="true" className="text-primary" size={19} /><span className="truncate">{values.resume?.name || 'Choose a file'}</span><input id="career-resume" name="resume" type="file" accept=".pdf,.doc,.docx" onChange={handleChange} className="sr-only" /></label></FormField>
+                <FormField id="career-phone" label="Phone" error={errors.phone} required><input id="career-phone" name="phone" type="tel" inputMode="numeric" autoComplete="tel" placeholder="(555) 000-0000" value={values.phone} onChange={handleChange} className={`${formControlClasses} ${errors.phone ? 'border-rose-500' : ''}`} /></FormField>
+                <FormField id="career-resume" label="Resume (PDF/DOCX max 10MB)" error={errors.resume} required><label className={`${formControlClasses} flex cursor-pointer items-center gap-3`}><FileText aria-hidden="true" className="text-primary" size={19} /><span className="truncate">{values.resume?.name || 'Choose a file'}</span><input id="career-resume" name="resume" type="file" accept=".pdf,.doc,.docx" onChange={handleChange} className="sr-only" /></label></FormField>
               </div>
               <div className="mt-6"><FormField id="career-message" label="Short Message" error={errors.message} required><textarea id="career-message" name="message" rows="5" value={values.message} onChange={handleChange} placeholder="Tell us what you would like to build and the roles that interest you." className={`${formControlClasses} resize-y ${errors.message ? 'border-rose-500' : ''}`} /></FormField></div>
-              <Button type="submit" className="mt-7">Send My Profile <ArrowRight aria-hidden="true" size={18} /></Button>
-              <p className="mt-4 flex gap-2 text-xs leading-5 text-slate-500"><ShieldCheck aria-hidden="true" className="shrink-0 text-primary" size={16} />Demo form only. No file or personal information is transmitted to a server.</p>
+              <Button type="submit" disabled={isSubmitting} className="mt-7">
+                {isSubmitting ? <><LoaderCircle className="animate-spin" size={18} /> Submitting Profile...</> : <>Send My Profile <ArrowRight aria-hidden="true" size={18} /></>}
+              </Button>
+              <p className="mt-4 flex gap-2 text-xs leading-5 text-slate-500"><ShieldCheck aria-hidden="true" className="shrink-0 text-primary" size={16} />Your resume and profile are transmitted securely to our recruitment department.</p>
             </form>}
           </Reveal>
         </div>

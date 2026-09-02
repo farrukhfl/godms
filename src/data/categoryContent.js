@@ -121,7 +121,7 @@ export const categoryContent = {
     faqDescription: 'Compare card readers, connected commerce, offline operation, dual pricing, and the migration process.',
     metaDescription: `Run in-store and online sales with ${siteConfig.company.posName}, featuring native dual pricing, optional apps, synchronized inventory, and offline support.`,
     showPricingDisclosure: true,
-    heroImage: '/homepage-images/pos-banner.png',
+    heroImage: '/solution-images/pos-solution.png',
     heroImageAlt: 'Dolphin POS complete counter workstation with customer display',
   },
   '/solutions/cash-advance': {

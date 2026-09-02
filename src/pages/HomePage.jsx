@@ -137,7 +137,7 @@ export default function HomePage() {
               </div>
             </Reveal>
 
-            {/* Right Hardware Banner Visual */}
+            {/* Right Hardware Banner Visual (Commercial-Grade Full POS Station) */}
             <Reveal direction="right" delay={150}>
               <div className="group relative mx-auto w-full max-w-xl">
                 {/* Multi-Layered Neon Aura & Radial Ground Reflection */}
@@ -211,10 +211,10 @@ export default function HomePage() {
                 <Reveal key={path} direction="scale" delay={(index % 4) * 90} className="h-full">
                   <Link
                     to={path}
-                    className="group flex h-full flex-col overflow-hidden rounded-[1.75rem] border border-slate-200/80 bg-white shadow-md shadow-navy/5 transition duration-500 hover:-translate-y-2 hover:border-primary/40 hover:shadow-2xl hover:shadow-primary/10"
+                    className="group flex h-full flex-col overflow-hidden rounded-[1.75rem] border border-primary/20 bg-white shadow-md shadow-navy/5 transition duration-500 hover:-translate-y-2 hover:border-primary hover:shadow-2xl hover:shadow-primary/20"
                   >
-                    {/* Solution Image Container */}
-                    <div className="card-image-sheen relative overflow-hidden bg-slate-900">
+                    {/* Solution Image Container with Theme Blue Border */}
+                    <div className="card-image-sheen relative overflow-hidden bg-slate-900 border-b-2 border-primary/40 group-hover:border-primary transition duration-300">
                       <img
                         src={category.heroImage || '/solution-images/pos-solution.png'}
                         alt={category.heroImageAlt || label}
@@ -227,7 +227,7 @@ export default function HomePage() {
                       <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-slate-950/70 via-transparent to-transparent" />
                       
                       {/* Floating ROI Tag */}
-                      <div className="absolute bottom-2.5 left-3 rounded-full border border-white/20 bg-slate-950/80 px-2.5 py-0.5 text-[11px] font-bold text-white backdrop-blur-md">
+                      <div className="absolute bottom-2.5 left-3 rounded-full border border-primary/40 bg-slate-950/80 px-2.5 py-0.5 text-[11px] font-bold text-white backdrop-blur-md">
                         {tag}
                       </div>
                     </div>
