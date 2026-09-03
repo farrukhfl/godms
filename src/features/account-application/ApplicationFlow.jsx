@@ -577,6 +577,10 @@ function PdfReviewModal({
   const activeDoc = documents[activeDocIndex] || null
   const rawUrl = viewingSummary && summaryUrl ? summaryUrl : activeDoc?.url
   const safeDirectUrl = useMemo(() => String(rawUrl || '').replace(/^http:\/\//i, 'https://'), [rawUrl])
+  const googleViewerUrl = useMemo(() => {
+    if (!safeDirectUrl) return null
+    return `https://docs.google.com/viewer?url=${encodeURIComponent(safeDirectUrl)}&embedded=true`
+  }, [safeDirectUrl])
 
   const [blobUrl, setBlobUrl] = useState(null)
   const [loadingPdf, setLoadingPdf] = useState(false)
@@ -608,8 +612,8 @@ function PdfReviewModal({
       })
       .catch(() => {
         if (isMounted) {
-          // If blob fetch is blocked by CORS, fallback to direct URL
-          setBlobUrl(safeDirectUrl)
+          // If blob fetch is blocked by CORS or network, fallback to Google Cloud Viewer to avoid X-Frame-Options block
+          setBlobUrl(googleViewerUrl)
           setLoadingPdf(false)
           setLoadFailed(true)
         }
@@ -621,11 +625,11 @@ function PdfReviewModal({
         URL.revokeObjectURL(currentCreatedUrl)
       }
     }
-  }, [isOpen, safeDirectUrl])
+  }, [isOpen, safeDirectUrl, googleViewerUrl])
 
   if (!isOpen) return null
 
-  const displayUrl = blobUrl || safeDirectUrl
+  const displayUrl = blobUrl || googleViewerUrl || safeDirectUrl
 
   return (
     <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-900/60 p-3 sm:p-6 backdrop-blur-sm">
