@@ -58,9 +58,9 @@ app.use((req, res, next) => {
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; " +
     "font-src 'self' https://fonts.gstatic.com data:; " +
     "img-src 'self' data: https: blob:; " +
-    "connect-src 'self' https://pos.gotmsolutions.com https://dev-derps.gotmsolutions.com https://testing.godms.com https://www.google.com; " +
-    "frame-src 'self' https://www.google.com https://recaptcha.google.com; " +
-    "frame-ancestors 'none';"
+    "connect-src 'self' blob: data: https://pos.gotmsolutions.com https://*.gotmsolutions.com https://dev-derps.gotmsolutions.com https://testing.godms.com https://*.amazonaws.com https://www.google.com; " +
+    "frame-src 'self' blob: data: https://pos.gotmsolutions.com https://*.gotmsolutions.com https://dev-derps.gotmsolutions.com https://testing.godms.com https://*.amazonaws.com https://www.google.com https://recaptcha.google.com; " +
+    "object-src 'self' blob: data: https://pos.gotmsolutions.com https://*.gotmsolutions.com;"
   )
   next()
 })
