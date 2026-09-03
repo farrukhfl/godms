@@ -145,13 +145,13 @@ export default function HomePage() {
                 <div className="pedestal-glow absolute -inset-x-8 -bottom-10 h-32 blur-xl" />
                 
                 {/* Image Chassis Container with Sheen Sweep */}
-                <div className="sheen-active card-image-sheen relative overflow-hidden rounded-[2.5rem] border-[2px] border-white/20 bg-slate-900/95 p-4 shadow-[0_25px_80px_-15px_rgba(12,121,247,0.5)] backdrop-blur-xl">
+                <div className="sheen-active card-image-sheen relative overflow-hidden rounded-[2.5rem] border-[2px] border-white/20 bg-slate-900/95 p-3 sm:p-4 shadow-[0_25px_80px_-15px_rgba(12,121,247,0.5)] backdrop-blur-xl">
                   <img
                     src="/homepage-images/pos-banner.png"
                     alt="Dolphin POS Complete Dual-Screen Station and Hardware Workstation"
                     width="1294"
                     height="952"
-                    className="h-auto w-full rounded-[1.75rem] object-cover transition duration-700 ease-out group-hover:scale-[1.03]"
+                    className="h-auto max-h-[440px] w-full rounded-[1.75rem] object-contain object-center"
                   />
 
                   {/* Hotspot Floating Badge 1 (Dual Screen) */}
@@ -222,7 +222,7 @@ export default function HomePage() {
                         decoding="async"
                         width="500"
                         height="320"
-                        className="h-44 w-full object-cover transition duration-700 ease-out group-hover:scale-108"
+                        className="h-48 w-full object-contain object-center p-2.5"
                       />
                       <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-slate-950/70 via-transparent to-transparent" />
                       
@@ -293,7 +293,7 @@ export default function HomePage() {
                 <Reveal key={path} direction="scale" delay={(index % 3) * 110} className="h-full">
                 <Link to={path} className="group flex h-full flex-col overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-lg shadow-navy/5 transition duration-500 hover:-translate-y-2 hover:border-primary/40 hover:shadow-2xl hover:shadow-primary/15">
                   {/* Image with Sheen and ROI Tag */}
-                  <div className="card-image-sheen relative overflow-hidden bg-slate-100">
+                  <div className="card-image-sheen relative overflow-hidden bg-slate-900 border-b border-slate-100">
                     <img
                       src={category.heroImage}
                       alt={category.heroImageAlt || label}
@@ -301,7 +301,7 @@ export default function HomePage() {
                       decoding="async"
                       width="600"
                       height="380"
-                      className="h-60 w-full object-cover transition duration-700 ease-out group-hover:scale-108"
+                      className="h-56 w-full object-contain object-center p-2.5"
                     />
                     <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
                     

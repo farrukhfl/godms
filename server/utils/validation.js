@@ -23,7 +23,17 @@ const volumeOptions = new Set([
 ])
 
 function clean(value) {
-  return typeof value === 'string' ? value.trim() : ''
+  if (typeof value !== 'string') return ''
+  return value
+    .normalize('NFC')
+    .replace(/<[^>]*>?/gm, '') // strip HTML/script tags
+    .split('')
+    .filter((ch) => {
+      const code = ch.charCodeAt(0)
+      return (code >= 32 && code !== 127) || code === 9 || code === 10 || code === 13
+    })
+    .join('')
+    .trim()
 }
 
 function validateCommonFields(body, { phoneRequired = true } = {}) {

@@ -40,20 +40,20 @@ export default function CategoryPageTemplate({ title, heroTitle, description, ty
               {showPricingDisclosure && <PricingDisclosure dark className="mt-5 max-w-2xl" />}
             </div>
             {heroImage && (
-              <div className="relative mx-auto w-full max-w-lg lg:ml-auto">
-                <div className="absolute -inset-4 -z-10 rounded-3xl bg-gradient-to-tr from-primary/40 via-cyan-400/25 to-primary/20 blur-2xl" />
-                <div className="card-image-sheen relative overflow-hidden rounded-[2rem] border-2 border-primary/60 bg-slate-900/95 p-3 shadow-[0_15px_50px_-10px_rgba(12,121,247,0.45)] ring-1 ring-primary/40 backdrop-blur-md group transition duration-500 hover:border-primary hover:shadow-[0_20px_60px_-10px_rgba(12,121,247,0.6)]">
+              <div className="relative mx-auto w-full max-w-xl lg:ml-auto">
+                <div className="absolute -inset-4 -z-10 rounded-3xl bg-gradient-to-tr from-primary/35 via-cyan-400/20 to-primary/15 blur-2xl" />
+                <div className="card-image-sheen relative overflow-hidden rounded-2xl border-2 border-primary/60 bg-slate-900/90 p-2 shadow-[0_15px_50px_-10px_rgba(12,121,247,0.4)] ring-1 ring-primary/40 backdrop-blur-md group transition duration-500 hover:border-primary hover:shadow-[0_20px_60px_-10px_rgba(12,121,247,0.55)]">
                   <img
                     src={heroImage}
                     alt={heroImageAlt || title}
                     loading="lazy"
                     decoding="async"
                     width="900"
-                    height="700"
-                    className={`${isAnimatedPage ? 'industry-hero-image' : ''} h-72 w-full rounded-2xl object-cover shadow-2xl border border-primary/25 transition duration-700 ease-out group-hover:scale-[1.03] sm:h-96`}
+                    height="600"
+                    className={`${isAnimatedPage ? 'industry-hero-image' : ''} h-auto max-h-[440px] w-full object-contain object-center`}
                   />
                   <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-slate-950/40 via-transparent to-transparent" />
-                  <div className="absolute bottom-5 left-5 rounded-full border border-primary/50 bg-slate-950/85 px-3.5 py-1.5 text-xs font-bold text-white shadow-lg backdrop-blur-md flex items-center gap-2">
+                  <div className="absolute bottom-3 left-3 rounded-full border border-primary/50 bg-slate-950/85 px-3 py-1 text-xs font-bold text-white shadow-lg backdrop-blur-md flex items-center gap-2">
                     <span className="h-2 w-2 rounded-full bg-primary animate-pulse" />
                     Verified {type}
                   </div>

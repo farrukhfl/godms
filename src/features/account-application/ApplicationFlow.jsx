@@ -9,6 +9,7 @@ import {
   CreditCard,
   Download,
   Eye,
+  EyeOff,
   FileCheck2,
   FileText,
   Globe2,
@@ -19,6 +20,7 @@ import {
   PackageCheck,
   PenLine,
   PencilLine,
+  Search,
   ShoppingBasket,
   ShoppingCart,
   UserRound,
@@ -29,6 +31,7 @@ import {
 import { useEffect, useMemo, useRef, useState } from 'react'
 import Button from '../../components/ui/Button'
 import FormField, { formControlClasses } from '../../components/ui/FormField'
+import GoogleRecaptcha from '../../components/ui/GoogleRecaptcha'
 import {
   applicationRequest,
   dataUrlToFile,
@@ -51,6 +54,18 @@ const steps = [
   ['Preferences', FileCheck2],
   ['Delivery', PackageCheck],
   ['Submit', PenLine],
+]
+
+// Alphabetical sequence (A to Z) starting with 'A' (ACH, AIRVAC, ATM) and placing Credit Card and ATM before POS
+const serviceOrder = [
+  'ach-processing',
+  'airvac',
+  'atm',
+  'cash-advance',
+  'credit-card',
+  'ebt',
+  'pos',
+  'website',
 ]
 
 const states = [
@@ -109,12 +124,50 @@ const merchantOwnedForms = {
   'ach-processing': 'merchantOwnedAchProcessing',
 }
 
+// Exact plan text overrides matching legacy form requirements
+const planOverrides = {
+  'surcharge': {
+    name: 'Surcharge',
+    description: '2.9% Applies to credit card transactions only. Debit: 1.75% + $0.15 per transaction DMS Monthly Fee*',
+  },
+  'cash discount': {
+    name: 'Cash Discount',
+    description: '3.9% Customers can save by paying with cash. DMS Monthly Fee*',
+  },
+  'cash-discount': {
+    name: 'Cash Discount',
+    description: '3.9% Customers can save by paying with cash. DMS Monthly Fee*',
+  },
+  'flat rate': {
+    name: 'Flat Rate',
+    description: '2.75% One simple rate for all transactions. DMS Monthly Fee*',
+  },
+  'interchange (ic plus)': {
+    name: 'Interchange (IC Plus)',
+    description: "0.25% + $0.07 per transaction Transparent pricing based on the card's interchange rate. DMS Monthly Fee*",
+  },
+  'ownership': {
+    name: 'Ownership',
+    description: 'Purchase the ATM and manage cash loading yourself or through an approved cash-loading service. Keep 90% of your ATM surcharge revenue.',
+  },
+  'placement': {
+    name: 'Placement',
+    description: 'We handle the ATM, cash loading, maintenance, and processing, while you earn a share of the surcharge revenue. Split ATM surcharge revenue 50/50 with Dolphin Merchant Services.',
+  },
+}
+
 const initialValues = {
   legalName: '', legalAddress: '', legalZipCode: '', legalCity: '', legalState: '', contactNumber: '', ebtFnsNumber: '',
   sameAsLegal: true, businessName: '', dbaAddress: '', businessZipCode: '', businessCity: '', businessState: '', dbaPhoneNumber: '',
-  taxType: '', feinNumber: '', ownerShipType: '', businessStartDate: '', businessType: '', email: '', website: '', productsDescription: '',
+  taxType: 'FEIN', feinNumber: '', ownerShipType: '', businessStartDate: '', businessType: '', email: '', website: '', productsDescription: '',
   ownerFirstName: '', ownerLastName: '', date: '', ownerSameAsLegal: true, residentialAddress: '', ownerShipZip: '', ownerShipCity: '', ownerShipState: '', ownerPhoneNumber: '', ownerEmail: '', socialSecurityNumber: '', dLFiles: [],
   bankName: '', accountNumber: '', routingNumber: '', bankFiles: [], taxCode: '', averageSale: '', maxSale: '', monthlySale: '', comment: '',
+  // ATM Conditional Fields
+  atmInternetPlan: 'Wireless Cellular Data ($15/month)',
+  atmSurchargeAmount: '3.00',
+  atmOwnershipOption: 'Buy New ATM from Dolphin',
+  atmModel: 'Hyosung Halo II',
+  atmEstimatedMonthlyTransactions: '250 - 500 transactions/mo',
 }
 
 function digits(value, max = 30) {
@@ -142,7 +195,7 @@ function formatCardNumber(value) {
 }
 
 function formatExpiryInput(value) {
-  const raw = String(value || '').replace(/\D/g, '').slice(0, 6)
+  const raw = String(value || '').replace(/\D/g, '').slice(0, 4)
   if (!raw) return ''
   if (raw.length === 1) {
     return parseInt(raw, 10) > 1 ? `0${raw}/` : raw
@@ -153,34 +206,15 @@ function formatExpiryInput(value) {
     if (month > 12) month = 12
     return `${String(month).padStart(2, '0')}/`
   }
-  if (raw.length <= 4) {
-    return `${raw.slice(0, 2)}/${raw.slice(2)}`
-  }
-  return `${raw.slice(0, 2)}/${raw.slice(2, 6)}`
+  return `${raw.slice(0, 2)}/${raw.slice(2, 4)}`
 }
 
 function getAuthorizeExpirationDate(rawExpiryDate) {
   if (!rawExpiryDate) return ''
-  const digitsOnly = String(rawExpiryDate).replace(/\D/g, '')
-  if (digitsOnly.length === 4) {
-    const month = parseInt(digitsOnly.slice(0, 2), 10)
-    if (month >= 1 && month <= 12) return digitsOnly
-  }
-  if (digitsOnly.length === 6) {
-    const month = digitsOnly.slice(0, 2)
-    const year = digitsOnly.slice(4, 6)
-    const monthNum = parseInt(month, 10)
-    if (monthNum >= 1 && monthNum <= 12) return `${month}${year}`
-  }
-  const match = String(rawExpiryDate).trim().match(/^(\d{1,2})\s*[/-]?\s*(\d{2}|\d{4})$/)
-  if (match) {
-    const month = match[1].padStart(2, '0')
-    let year = match[2]
-    if (year.length === 4) year = year.slice(-2)
-    const monthNum = parseInt(month, 10)
-    if (monthNum >= 1 && monthNum <= 12 && /^\d{2}$/.test(year)) {
-      return `${month}${year}`
-    }
+  const clean = String(rawExpiryDate).replace(/\D/g, '')
+  if (clean.length === 4) {
+    const month = parseInt(clean.slice(0, 2), 10)
+    if (month >= 1 && month <= 12) return clean
   }
   return ''
 }
@@ -194,9 +228,26 @@ function validateCardExpiry(rawExpiryDate) {
   const currentYear = now.getFullYear()
   const currentMonth = now.getMonth() + 1
   if (year < currentYear || (year === currentYear && month < currentMonth)) {
-    return 'Expiry date must be in the future.'
+    return 'Card expiry date cannot be in the past.'
   }
   return null
+}
+
+function isValidLuhn(cardNumber) {
+  const clean = String(cardNumber || '').replace(/\D/g, '')
+  if (clean.length < 13 || clean.length > 19) return false
+  let sum = 0
+  let shouldDouble = false
+  for (let i = clean.length - 1; i >= 0; i -= 1) {
+    let digit = parseInt(clean[i], 10)
+    if (shouldDouble) {
+      digit *= 2
+      if (digit > 9) digit -= 9
+    }
+    sum += digit
+    shouldDouble = !shouldDouble
+  }
+  return sum % 10 === 0
 }
 
 function isItemInStock(item) {
@@ -210,23 +261,6 @@ function isItemInStock(item) {
     (typeof item.quantityInStock === 'number' && item.quantityInStock > 0) ||
     (typeof item.inventoryQuantity === 'number' && item.inventoryQuantity > 0)
   )
-}
-
-function isValidLuhn(cardNumber) {
-  const digitsOnly = String(cardNumber || '').replace(/\D/g, '')
-  if (digitsOnly.length < 13 || digitsOnly.length > 19) return false
-  let sum = 0
-  let shouldDouble = false
-  for (let i = digitsOnly.length - 1; i >= 0; i -= 1) {
-    let digit = parseInt(digitsOnly[i], 10)
-    if (shouldDouble) {
-      digit *= 2
-      if (digit > 9) digit -= 9
-    }
-    sum += digit
-    shouldDouble = !shouldDouble
-  }
-  return sum % 10 === 0
 }
 
 function getServiceLabel(solution) {
@@ -250,17 +284,46 @@ function normalizeAgreementDocs(result) {
     .filter((doc) => doc.url)
 }
 
-function Field({ id, label, required, error, children, ...props }) {
+function Field({ id, label, required, error, tooltip, children, ...props }) {
   return (
-    <FormField id={id} label={label} required={required} error={error}>
+    <FormField id={id} label={label} required={required} error={error} tooltip={tooltip}>
       {children || <input id={id} className={`${formControlClasses} ${error ? 'border-rose-500' : ''}`} {...props} />}
     </FormField>
   )
 }
 
-function SelectField({ id, label, required, error, value, onChange, options, placeholder = 'Select an option' }) {
+function MaskedField({ id, label, required, error, tooltip, value, onChange, placeholder, maxLength, inputMode = 'text' }) {
+  const [show, setShow] = useState(false)
   return (
-    <FormField id={id} label={label} required={required} error={error}>
+    <FormField id={id} label={label} required={required} error={error} tooltip={tooltip}>
+      <div className="relative">
+        <input
+          id={id}
+          type={show ? 'text' : 'password'}
+          value={value}
+          onChange={onChange}
+          placeholder={placeholder}
+          maxLength={maxLength}
+          inputMode={inputMode}
+          className={`${formControlClasses} pr-11 ${error ? 'border-rose-500' : ''}`}
+        />
+        <button
+          type="button"
+          tabIndex="-1"
+          onClick={() => setShow(!show)}
+          className="absolute right-3 top-1/2 -translate-y-1/2 p-1.5 text-slate-400 hover:text-navy transition-colors focus:outline-none"
+          aria-label={show ? 'Hide characters' : 'Show characters'}
+        >
+          {show ? <EyeOff size={18} /> : <Eye size={18} />}
+        </button>
+      </div>
+    </FormField>
+  )
+}
+
+function SelectField({ id, label, required, error, tooltip, value, onChange, options, placeholder = 'Select an option' }) {
+  return (
+    <FormField id={id} label={label} required={required} error={error} tooltip={tooltip}>
       <select id={id} value={value} onChange={onChange} className={`${formControlClasses} ${error ? 'border-rose-500' : ''}`}>
         <option value="">{placeholder}</option>
         {options.map((option) => {
@@ -382,7 +445,6 @@ function SignatureModal({ isOpen, onClose, onSubmit, isSigning }) {
     if (mode === 'draw') {
       const canvas = canvasRef.current
       if (!canvas) return
-      // Check if blank
       const context = canvas.getContext('2d')
       const pixelBuffer = new Uint32Array(
         context.getImageData(0, 0, canvas.width, canvas.height).data.buffer
@@ -510,30 +572,11 @@ function PdfReviewModal({
   onOpenSignModal,
   onSubmitFinal,
   isAllSigned,
-  applications = [],
-  checkedByApp = {},
-  onToggleChecked,
 }) {
-  const [modalError, setModalError] = useState('')
-
-  useEffect(() => {
-    setModalError('')
-  }, [isOpen, activeDocIndex])
-
   if (!isOpen) return null
 
   const activeDoc = documents[activeDocIndex] || null
   const currentUrl = viewingSummary && summaryUrl ? summaryUrl : activeDoc?.url
-
-  const handleSignClick = () => {
-    const uncheckedApp = applications.find((app) => !checkedByApp[app.applicationId])
-    if (uncheckedApp) {
-      setModalError(`Please agree to all terms and conditions for ${getServiceLabel(uncheckedApp.solution)} before signing.`)
-      return
-    }
-    setModalError('')
-    onOpenSignModal()
-  }
 
   return (
     <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-900/60 p-3 sm:p-6 backdrop-blur-sm">
@@ -605,48 +648,18 @@ function PdfReviewModal({
         </div>
 
         {/* Footer Actions */}
-        <div className="flex shrink-0 flex-col gap-3 border-t border-slate-200 bg-white px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex min-w-0 flex-col gap-2">
+        <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-t border-slate-200 bg-white px-5 py-4">
+          <div className="flex items-center gap-2">
             {activeDoc?.signed && !viewingSummary && (
-              <div>
-                <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-700">
-                  <Check size={14} /> Signed
-                </span>
-              </div>
-            )}
-            {!activeDoc?.signed && !viewingSummary && applications.length > 0 && (
-              <div className="flex flex-col gap-1.5">
-                {applications.map((application) => {
-                  const appId = application.applicationId
-                  const isChecked = Boolean(checkedByApp[appId])
-                  return (
-                    <label key={appId} className="flex cursor-pointer items-start gap-2 text-xs font-bold text-slate-700 sm:text-sm">
-                      <input
-                        type="checkbox"
-                        checked={isChecked}
-                        onChange={(e) => {
-                          const checked = e.target.checked
-                          onToggleChecked?.(appId, checked)
-                          if (checked) setModalError('')
-                        }}
-                        className="mt-0.5 h-4 w-4 shrink-0 rounded accent-primary"
-                      />
-                      <span className="line-clamp-2">
-                        I have read and agree to all terms and conditions for {getServiceLabel(application.solution)}.
-                      </span>
-                    </label>
-                  )
-                })}
-                {modalError && (
-                  <p className="text-xs font-bold text-rose-600">{modalError}</p>
-                )}
-              </div>
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-700">
+                <Check size={14} /> Signed
+              </span>
             )}
           </div>
 
-          <div className="flex shrink-0 flex-wrap items-center gap-2 sm:self-center">
+          <div className="flex flex-wrap items-center gap-2">
             {!activeDoc?.signed && !viewingSummary ? (
-              <Button type="button" onClick={handleSignClick}>
+              <Button type="button" onClick={onOpenSignModal}>
                 <PencilLine size={16} /> Sign Agreement
               </Button>
             ) : (
@@ -662,17 +675,7 @@ function PdfReviewModal({
                   </Button>
                 )}
                 {isAllSigned && (
-                  <Button
-                    type="button"
-                    onClick={() => {
-                      const uncheckedApp = applications.find((app) => !checkedByApp[app.applicationId])
-                      if (uncheckedApp) {
-                        setModalError(`Please agree to all terms and conditions before submitting.`)
-                        return
-                      }
-                      onSubmitFinal()
-                    }}
-                  >
+                  <Button type="button" onClick={onSubmitFinal}>
                     Submit Application <CheckCircle2 size={16} />
                   </Button>
                 )}
@@ -685,52 +688,72 @@ function PdfReviewModal({
   )
 }
 
-function validate(step, values, selectedSolutions, plans, products, shipments, checkedByApp, applications = [], catalog = {}) {
+function validate(step, values, selectedSolutions, plans, products, shipments, checkedByApp, applications = [], isRobotVerified = false) {
   const errors = {}
   const required = (key, message) => { if (!String(values[key] ?? '').trim()) errors[key] = message }
 
   if (step === 0 && selectedSolutions.length === 0) {
-    errors.solutions = 'Select at least one service.'
+    errors.solutions = 'Please select at least one merchant service to continue.'
   }
 
   if (step === 1) {
     ['legalName', 'legalAddress', 'legalZipCode', 'legalCity', 'legalState', 'contactNumber', 'taxType', 'feinNumber', 'ownerShipType', 'businessType', 'email', 'productsDescription'].forEach((key) => required(key, 'This field is required.'))
     if (digits(values.contactNumber, 20).length < 10) errors.contactNumber = 'Enter a valid 10-digit phone number.'
-    if (values.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(values.email)) errors.email = 'Enter a valid email address.'
-    if (values.productsDescription && !/\p{L}/u.test(values.productsDescription)) errors.productsDescription = 'Describe what your business sells using words, not only a number.'
+    if (digits(values.legalZipCode, 10).length !== 5) errors.legalZipCode = 'ZIP Code must be exactly 5 digits.'
+    if (values.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(values.email)) errors.email = 'Enter a valid business email address.'
+    if (digits(values.feinNumber, 20).length !== 9) errors.feinNumber = 'FEIN / Tax ID Number must contain exactly 9 digits.'
+    if (values.productsDescription && !/\p{L}/u.test(values.productsDescription)) errors.productsDescription = 'Describe what your business sells using words, not only numbers.'
     if (selectedSolutions.includes('ebt')) required('ebtFnsNumber', 'FNS number is required for EBT processing.')
-    if (!values.sameAsLegal) ['businessName', 'dbaAddress', 'businessZipCode', 'businessCity', 'businessState', 'dbaPhoneNumber'].forEach((key) => required(key, 'This field is required.'))
+    if (!values.sameAsLegal) {
+      ['businessName', 'dbaAddress', 'businessZipCode', 'businessCity', 'businessState', 'dbaPhoneNumber'].forEach((key) => required(key, 'This field is required.'))
+      if (digits(values.businessZipCode, 10).length !== 5) errors.businessZipCode = 'DBA ZIP Code must be exactly 5 digits.'
+    }
   }
 
   if (step === 2) {
     ['ownerFirstName', 'ownerLastName', 'date', 'residentialAddress', 'ownerShipZip', 'ownerShipCity', 'ownerShipState', 'ownerPhoneNumber', 'ownerEmail', 'socialSecurityNumber'].forEach((key) => required(key, 'This field is required.'))
-    if (digits(values.ownerPhoneNumber, 20).length < 10) errors.ownerPhoneNumber = 'Enter a valid 10-digit phone number.'
-    if (digits(values.socialSecurityNumber, 20).length !== 9) errors.socialSecurityNumber = 'Enter a valid 9-digit Social Security number.'
-    if (!values.dLFiles.length) {
-      errors.dLFiles = 'Upload a driver license or government-issued ID.'
-    } else if (values.dLFiles.some((f) => f.size > 10 * 1024 * 1024)) {
-      errors.dLFiles = 'Each ID file must be less than 10MB.'
-    }
+    if (digits(values.ownerPhoneNumber, 20).length < 10) errors.ownerPhoneNumber = 'Enter a valid 10-digit owner phone number.'
+    if (digits(values.ownerShipZip, 10).length !== 5) errors.ownerShipZip = 'Residential ZIP Code must be exactly 5 digits.'
+    if (digits(values.socialSecurityNumber, 20).length !== 9) errors.socialSecurityNumber = 'Social Security Number must contain exactly 9 digits.'
+    if (!values.dLFiles.length) errors.dLFiles = 'Upload a driver license or government-issued ID.'
   }
 
   if (step === 3) {
     ['accountNumber', 'routingNumber'].forEach((key) => required(key, 'This field is required.'))
-    if (!values.bankFiles.length) {
-      errors.bankFiles = 'Upload a void check or bank letter.'
-    } else if (values.bankFiles.some((f) => f.size > 10 * 1024 * 1024)) {
-      errors.bankFiles = 'Each bank document must be less than 10MB.'
+    const cleanRouting = digits(values.routingNumber, 10)
+    if (cleanRouting.length !== 9) {
+      errors.routingNumber = 'Routing Number must contain exactly 9 digits.'
     }
+    if (!values.bankFiles.length) errors.bankFiles = 'Upload a void check or bank letter.'
     if (selectedSolutions.some((solution) => saleSolutions.has(solution))) {
       ['averageSale', 'maxSale', 'monthlySale'].forEach((key) => required(key, 'This field is required.'))
     }
   }
 
-  if (step === 4 && Object.keys(plans).length < selectedSolutions.length) {
-    errors.plan = 'Select one plan for each service.'
+  if (step === 4) {
+    if (Object.keys(plans).length < selectedSolutions.length) {
+      errors.plan = 'Please select one pricing plan for each requested service.'
+    }
+    // ATM Conditional validation
+    if (selectedSolutions.includes('atm')) {
+      const atmApp = applications.find((a) => a.solution === 'atm')
+      const chosenAtmPlan = (plans[atmApp?.applicationId] || '').toLowerCase()
+      if (chosenAtmPlan.includes('owner') || chosenAtmPlan.includes('placement')) {
+        if (!values.atmInternetPlan) errors.atmInternetPlan = 'Select an internet / data plan for your ATM.'
+      }
+      if (chosenAtmPlan.includes('owner')) {
+        if (!values.atmSurchargeAmount) errors.atmSurchargeAmount = 'Enter the target surcharge amount.'
+        if (!values.atmOwnershipOption) errors.atmOwnershipOption = 'Select your ATM ownership option.'
+        if (!values.atmModel) errors.atmModel = 'Enter your ATM model name.'
+      }
+      if (chosenAtmPlan.includes('placement')) {
+        if (!values.atmEstimatedMonthlyTransactions) errors.atmEstimatedMonthlyTransactions = 'Select estimated monthly ATM transactions.'
+      }
+    }
   }
 
   if (step === 5 && Object.values(products).some((selection) => !selection.own && !Object.values(selection.items || {}).some((quantity) => quantity > 0))) {
-    errors.products = 'Select hardware or indicate that you already own hardware for each service.'
+    errors.products = 'Select hardware items or indicate that you already own compatible hardware for each service.'
   }
 
   if (step === 7) {
@@ -740,8 +763,10 @@ function validate(step, values, selectedSolutions, plans, products, shipments, c
         if (form.type === 'Shipping') {
           if (!form.recipientName || !form.recipientPhone || !form.email || !form.address || !form.zipCode || !form.state) {
             errors[`shipment-${id}`] = 'Complete all required shipping fields.'
+          } else if (digits(form.zipCode, 10).length !== 5) {
+            errors[`shipment-${id}`] = 'Shipping ZIP Code must be 5 digits.'
           } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) {
-            errors[`shipment-${id}`] = 'Enter a valid email address for shipping.'
+            errors[`shipment-${id}`] = 'Enter a valid email address for delivery updates.'
           }
         }
         if (form.type === 'Pickup') {
@@ -750,19 +775,18 @@ function validate(step, values, selectedSolutions, plans, products, shipments, c
           }
         }
 
-        const hasInStock = products[id] && !products[id].own && Object.entries(products[id].items || {}).some(([itemId, qty]) => {
+        const hasInStock = products[id] && !products[id].own && Object.entries(products[id].items || {}).some(([, qty]) => {
           if (!qty || qty <= 0) return false
-          const prod = (catalog.products || []).find((p) => String(p.id) === String(itemId))
-          return isItemInStock(prod)
+          return true
         })
         const effectivePaymentType = (!hasInStock && form.paymentType === 'Pay Now') ? 'Pay Later' : form.paymentType
 
         if (effectivePaymentType === 'Pay Now' && hasInStock) {
-          const cleanCard = digits(form.cardNumber, 20)
-          if (!form.nameOnCard || cleanCard.length < 13 || !form.expiryDate || !form.cvv || !form.billingAddress) {
-            errors[`payment-${id}`] = 'Complete all required card details.'
+          const cleanCard = digits(form.cardNumber, 16)
+          if (!form.nameOnCard || cleanCard.length < 15 || !form.expiryDate || !form.cvv || !form.billingAddress) {
+            errors[`payment-${id}`] = 'Complete all required card payment details.'
           } else if (!isValidLuhn(cleanCard)) {
-            errors[`payment-${id}`] = 'Enter a valid card number.'
+            errors[`payment-${id}`] = 'Enter a valid 16-digit credit card number.'
           } else {
             const expiryError = validateCardExpiry(form.expiryDate)
             if (expiryError) errors[`payment-${id}`] = expiryError
@@ -781,6 +805,9 @@ function validate(step, values, selectedSolutions, plans, products, shipments, c
     const uncheckedApp = applications.find((app) => !checkedByApp[app.applicationId])
     if (uncheckedApp) {
       errors.accepted = `Please agree to the terms and conditions for ${getServiceLabel(uncheckedApp.solution)} before submitting.`
+    }
+    if (!isRobotVerified) {
+      errors.recaptcha = 'Please complete the security verification challenge.'
     }
   }
 
@@ -802,6 +829,8 @@ export default function ApplicationFlow({ onComplete }) {
   const [signedByApp, setSignedByApp] = useState({})
   const [summaryUrlByApp, setSummaryUrlByApp] = useState({})
   const [uploadedSignatures, setUploadedSignatures] = useState({})
+  const [hardwareSearch, setHardwareSearch] = useState('')
+  const [isRobotVerified, setIsRobotVerified] = useState(false)
   const [errors, setErrors] = useState({})
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
@@ -822,14 +851,19 @@ export default function ApplicationFlow({ onComplete }) {
     setErrors((current) => ({ ...current, [key]: '' }))
   }
 
-  // Load service categories on mount
+  // Load service categories on mount (Sorted: Credit Card and ATM prioritized before POS)
   useEffect(() => {
     const controller = new AbortController()
     applicationRequest('item-category/', { signal: controller.signal })
       .then((result) => {
         const rawServices = unwrapData(result) || []
         const filtered = rawServices.filter((service) => supportedSolutions.has(service.solution))
-        setCatalog((current) => ({ ...current, services: filtered }))
+        const sorted = filtered.sort((a, b) => {
+          const idxA = serviceOrder.indexOf(a.solution)
+          const idxB = serviceOrder.indexOf(b.solution)
+          return (idxA === -1 ? 99 : idxA) - (idxB === -1 ? 99 : idxB)
+        })
+        setCatalog((current) => ({ ...current, services: sorted }))
         setError('')
       })
       .catch((nextError) => {
@@ -865,46 +899,44 @@ export default function ApplicationFlow({ onComplete }) {
       .catch((nextError) => setError(nextError.message))
   }, [step, catalog.preferences.length])
 
-  // Initialize shipments & products for applications
+  // Pre-fill shipments & delivery details from Business & Ownership data
   useEffect(() => {
-    if (!applications.length || Object.keys(shipments).length) return
-    const forms = {}
-    const selections = {}
-    const checked = {}
-    applications.forEach((application) => {
-      forms[application.applicationId] = {
-        type: 'Shipping',
-        paymentType: 'Pay Now',
-        recipientName: values.businessName || values.legalName || '',
-        companyName: values.businessName || '',
-        recipientPhone: values.contactNumber || '',
-        email: values.email || '',
-        address: values.dbaAddress || values.legalAddress || '',
-        floorStreet: '',
-        zipCode: values.businessZipCode || values.legalZipCode || '',
-        country: 'United States',
-        state: values.businessState || values.legalState || '',
-        pickupLocationName: values.businessName || '',
-        contactName: values.ownerFirstName ? `${values.ownerFirstName} ${values.ownerLastName}` : '',
-        pickupDate: '',
-        specialInstructions: '',
-        merchantOwnedPreferences: {},
-        nameOnCard: values.businessName || values.legalName || '',
-        cardNumber: '',
-        expiryDate: '',
-        cvv: '',
-        billingAddress: values.dbaAddress || values.legalAddress || '',
-        leaseTerm: '',
-        monthlyPayment: '',
-        startDate: '',
-      }
-      selections[application.applicationId] = { own: false, items: {} }
-      checked[application.applicationId] = false
+    if (!applications.length) return
+    setShipments((prev) => {
+      const next = { ...prev }
+      applications.forEach((application) => {
+        const existing = next[application.applicationId] || {}
+        const ownerFull = `${values.ownerFirstName || ''} ${values.ownerLastName || ''}`.trim()
+        next[application.applicationId] = {
+          type: existing.type || 'Shipping',
+          paymentType: existing.paymentType || 'Pay Now',
+          recipientName: existing.recipientName || values.businessName || values.legalName || ownerFull || '',
+          companyName: existing.companyName || values.businessName || values.legalName || '',
+          recipientPhone: existing.recipientPhone || values.dbaPhoneNumber || values.contactNumber || values.ownerPhoneNumber || '',
+          email: existing.email || values.email || values.ownerEmail || '',
+          address: existing.address || values.dbaAddress || values.legalAddress || '',
+          floorStreet: existing.floorStreet || '',
+          zipCode: existing.zipCode || values.businessZipCode || values.legalZipCode || '',
+          country: 'United States',
+          state: existing.state || values.businessState || values.legalState || '',
+          pickupLocationName: existing.pickupLocationName || values.businessName || values.legalName || '',
+          contactName: existing.contactName || ownerFull || values.businessName || '',
+          pickupDate: existing.pickupDate || '',
+          specialInstructions: existing.specialInstructions || '',
+          merchantOwnedPreferences: existing.merchantOwnedPreferences || {},
+          nameOnCard: existing.nameOnCard || values.businessName || values.legalName || ownerFull || '',
+          cardNumber: existing.cardNumber || '',
+          expiryDate: existing.expiryDate || '',
+          cvv: existing.cvv || '',
+          billingAddress: existing.billingAddress || values.dbaAddress || values.legalAddress || '',
+          leaseTerm: existing.leaseTerm || '',
+          monthlyPayment: existing.monthlyPayment || '',
+          startDate: existing.startDate || '',
+        }
+      })
+      return next
     })
-    setShipments(forms)
-    setProducts(selections)
-    setCheckedByApp((current) => ({ ...checked, ...current }))
-  }, [applications, shipments, values])
+  }, [applications, values, step])
 
   // Fetch agreement documents for Step 8
   useEffect(() => {
@@ -1034,7 +1066,7 @@ export default function ApplicationFlow({ onComplete }) {
         businessCity: values.sameAsLegal ? values.legalCity : values.businessCity,
         businessState: values.sameAsLegal ? values.legalState : values.businessState,
         dbaPhoneNumber: values.sameAsLegal ? values.contactNumber : values.dbaPhoneNumber,
-        taxType: values.taxType,
+        taxType: values.taxType || 'FEIN',
         feinNumber: values.feinNumber,
         ownerShipType: values.ownerShipType,
         businessStartDate: values.businessStartDate ? apiDate(values.businessStartDate) : undefined,
@@ -1089,15 +1121,25 @@ export default function ApplicationFlow({ onComplete }) {
     }
 
     if (step === 4) {
-      // Save plan name matching backend agreement rules
+      // Save plan name and ATM preferences
       await Promise.all(
         applications.map((application) => {
           const selectedPlan = plans[application.applicationId]
-          return saveApplication({
+          const payload = {
             currentStep: 5,
             plan: selectedPlan,
             applicationId: application.applicationId,
-          })
+          }
+          if (application.solution === 'atm') {
+            payload.atmDetails = {
+              internetPlan: values.atmInternetPlan,
+              surchargeAmount: values.atmSurchargeAmount,
+              ownershipOption: values.atmOwnershipOption,
+              model: values.atmModel,
+              estimatedMonthlyTransactions: values.atmEstimatedMonthlyTransactions,
+            }
+          }
+          return saveApplication(payload)
         })
       )
       return
@@ -1196,7 +1238,7 @@ export default function ApplicationFlow({ onComplete }) {
 
           if (!isMerchantOwned && effectivePaymentType === 'Pay Now' && hasInStock) {
             const expiryAuthDate = getAuthorizeExpirationDate(form.expiryDate)
-            const cleanCard = digits(form.cardNumber, 20)
+            const cleanCard = digits(form.cardNumber, 16)
             const inStockAmount = getInStockTotal(application.applicationId)
 
             shipment.cardDetails = {
@@ -1243,36 +1285,13 @@ export default function ApplicationFlow({ onComplete }) {
     setIsPdfModalOpen(true)
   }
 
-  const handleReviewAndSign = (applicationId, docIndex = 0) => {
-    const uncheckedApp = applications.find((app) => !checkedByApp[app.applicationId])
-    if (uncheckedApp) {
-      const msg = `Please agree to all terms and conditions for ${getServiceLabel(uncheckedApp.solution)} before reviewing and signing.`
-      setErrors((prev) => ({ ...prev, accepted: msg }))
-      setError(msg)
-      requestAnimationFrame(() => {
-        const uncheckedEl = document.querySelector('[data-terms-checkbox="true"]:not(:checked)')
-        if (uncheckedEl) {
-          uncheckedEl.scrollIntoView({ behavior: 'smooth', block: 'center' })
-          uncheckedEl.focus()
-        }
-      })
-      return
-    }
-    handleOpenPdfModal(applicationId, docIndex)
-  }
-
   const handleSignatureSubmit = async (signatureDataUrl) => {
-    const uncheckedApp = applications.find((app) => !checkedByApp[app.applicationId])
-    if (uncheckedApp) {
-      setError(`Please agree to the terms and conditions for ${getServiceLabel(uncheckedApp.solution)} before submitting signature.`)
-      return
-    }
     if (!activeAppId) return
     const docs = agreements[activeAppId] || []
     const activeDoc = docs[activeDocIndex] || null
 
     if (!activeDoc?.agreementId) {
-      setError('No active agreement selected.')
+      setError('No active agreement document selected.')
       return
     }
 
@@ -1293,7 +1312,6 @@ export default function ApplicationFlow({ onComplete }) {
       const signRes = await signAgreementDocument(activeAppId, activeDoc.agreementId, fileRef.url)
       const signedData = unwrapData(signRes)
 
-      // Update the document in state
       const updatedDocs = docs.map((doc, idx) => {
         if (idx === activeDocIndex || doc.agreementId === activeDoc.agreementId) {
           return {
@@ -1318,14 +1336,12 @@ export default function ApplicationFlow({ onComplete }) {
         })
       }
 
-      // Check for remaining unsigned documents in this app
       const nextUnsignedIdx = updatedDocs.findIndex((d) => !d.signed)
       if (nextUnsignedIdx >= 0) {
         setActiveDocIndex(nextUnsignedIdx)
         setViewingSummary(false)
         setIsPdfModalOpen(true)
       } else {
-        // Check for unsigned agreements in subsequent applications
         const nextApp = applications.find(
           (app) =>
             String(app.applicationId) !== String(activeAppId) &&
@@ -1351,11 +1367,6 @@ export default function ApplicationFlow({ onComplete }) {
   }
 
   const submitFinalApplications = async () => {
-    const uncheckedApp = applications.find((app) => !checkedByApp[app.applicationId])
-    if (uncheckedApp) {
-      setError(`Please agree to the terms and conditions for ${getServiceLabel(uncheckedApp.solution)} before submitting.`)
-      return
-    }
     setLoading(true)
     setError('')
     try {
@@ -1380,22 +1391,30 @@ export default function ApplicationFlow({ onComplete }) {
   }
 
   const next = async () => {
-    const nextErrors = validate(step, values, solutions, plans, products, shipments, checkedByApp, applications, catalog)
+    const nextErrors = validate(step, values, solutions, plans, products, shipments, checkedByApp, applications, isRobotVerified)
     setErrors(nextErrors)
     setError('')
 
     if (Object.keys(nextErrors).length) {
       if (nextErrors.accepted) {
         setError(nextErrors.accepted)
+      } else if (nextErrors.recaptcha) {
+        setError(nextErrors.recaptcha)
+      } else {
+        const firstErrorKey = Object.keys(nextErrors)[0]
+        setError(nextErrors[firstErrorKey] || 'Please review and fix the highlighted fields above.')
       }
-      requestAnimationFrame(() => document.querySelector('[aria-invalid="true"], [data-error="true"]')?.focus())
+      requestAnimationFrame(() => {
+        const firstErrEl = document.querySelector('[aria-invalid="true"], [data-error="true"], .border-rose-500')
+        firstErrEl?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+        firstErrEl?.focus?.()
+      })
       return
     }
 
     setLoading(true)
     try {
       if (step === 8) {
-        // Check if there are applications with unsigned agreements
         const unsignedApp = applications.find((app) => {
           const isSigned = Boolean(signedByApp[app.applicationId])
           const docs = agreements[app.applicationId] || []
@@ -1477,7 +1496,9 @@ export default function ApplicationFlow({ onComplete }) {
         label="ZIP Code"
         required
         value={values[`${prefix}ZipCode`]}
-        onChange={(event) => change(`${prefix}ZipCode`, event.target.value)}
+        onChange={(event) => change(`${prefix}ZipCode`, digits(event.target.value, 5))}
+        placeholder="78701"
+        maxLength={5}
         error={errors[`${prefix}ZipCode`]}
       />
       <Field
@@ -1553,7 +1574,7 @@ export default function ApplicationFlow({ onComplete }) {
           </>
         )}
 
-        {/* Step 1: Business */}
+        {/* Step 1: Business Information */}
         {step === 1 && (
           <>
             <StepTitle title="Business information" description="Tell us about the legal entity and the business location where you operate." />
@@ -1565,7 +1586,7 @@ export default function ApplicationFlow({ onComplete }) {
             <div className="mt-5">{businessFields('legal')}</div>
             {solutions.includes('ebt') && (
               <div className="mt-5">
-                <Field id="ebtFnsNumber" label="EBT FNS Number" required value={values.ebtFnsNumber} onChange={(event) => change('ebtFnsNumber', event.target.value)} error={errors.ebtFnsNumber} />
+                <Field id="ebtFnsNumber" label="EBT FNS Number" required value={values.ebtFnsNumber} onChange={(event) => change('ebtFnsNumber', event.target.value)} error={errors.ebtFnsNumber} tooltip="Food and Nutrition Service 7-digit retailer authorization number." />
               </div>
             )}
             <label className="mt-6 flex items-center gap-3 font-semibold text-slate-700">
@@ -1583,27 +1604,57 @@ export default function ApplicationFlow({ onComplete }) {
               </div>
             )}
             <div className="mt-7 grid gap-5 border-t border-slate-200 pt-7 sm:grid-cols-2">
-              <SelectField id="taxType" label="Type of Tax ID" required value={values.taxType} onChange={(event) => change('taxType', event.target.value)} options={['FEIN', 'SSN']} error={errors.taxType} />
-              <Field id="feinNumber" label="FEIN / Tax ID Number" required value={values.feinNumber} onChange={(event) => change('feinNumber', digits(event.target.value, 9))} error={errors.feinNumber} />
+              <SelectField
+                id="taxType"
+                label="Type of Tax ID"
+                required
+                value={values.taxType || 'FEIN'}
+                onChange={(event) => change('taxType', event.target.value)}
+                options={['FEIN', 'EIN']}
+                error={errors.taxType}
+                tooltip="Federal Tax Identification type (FEIN or EIN assigned by IRS)."
+              />
+              <Field
+                id="feinNumber"
+                label="FEIN / Tax ID Number (9 Digits)"
+                required
+                value={values.feinNumber}
+                onChange={(event) => change('feinNumber', digits(event.target.value, 9))}
+                placeholder="123456789"
+                maxLength={9}
+                error={errors.feinNumber}
+                tooltip="9-digit Federal Employer Identification Number assigned by the IRS."
+              />
               <SelectField id="ownerShipType" label="Ownership Type" required value={values.ownerShipType} onChange={(event) => change('ownerShipType', event.target.value)} options={['Sole Proprietorship', 'Partnership', 'Corporation', 'LLC', 'Non-Profit']} error={errors.ownerShipType} />
               <Field id="businessStartDate" label="Business Start Date" type="date" value={values.businessStartDate} onChange={(event) => change('businessStartDate', event.target.value)} />
-              <SelectField id="businessType" label="Business Type" required value={values.businessType} onChange={(event) => change('businessType', event.target.value)} options={['Retail', 'Restaurant', 'Service', 'E-Commerce', 'Wholesale', 'Other']} error={errors.businessType} />
+              <SelectField id="businessType" label="Business Type" required value={values.businessType} onChange={(event) => change('businessType', event.target.value)} options={['Retail', 'Restaurant', 'Service', 'E-Commerce', 'Wholesale', 'Other']} error={errors.businessType} tooltip="Primary business category determining rate classification." />
               <Field id="email" label="Business Email" required type="email" value={values.email} onChange={(event) => change('email', event.target.value)} error={errors.email} />
-              <Field id="website" label="Website URL" type="url" value={values.website} onChange={(event) => change('website', event.target.value)} />
-              <Field id="productsDescription" label="Products / Services Description" required value={values.productsDescription} onChange={(event) => change('productsDescription', event.target.value)} error={errors.productsDescription} />
+              <Field id="website" label="Website URL" type="url" placeholder="https://" value={values.website} onChange={(event) => change('website', event.target.value)} />
+              <Field id="productsDescription" label="Products / Services Description" required value={values.productsDescription} onChange={(event) => change('productsDescription', event.target.value)} error={errors.productsDescription} tooltip="Brief explanation of what goods or services your business sells." />
             </div>
           </>
         )}
 
-        {/* Step 2: Ownership */}
+        {/* Step 2: Ownership Information */}
         {step === 2 && (
           <>
             <StepTitle title="Ownership information" description="Provide details for the primary owner or authorized principal." />
             <div className="grid gap-5 sm:grid-cols-2">
               <Field id="ownerFirstName" label="Owner First Name" required value={values.ownerFirstName} onChange={(event) => change('ownerFirstName', event.target.value)} error={errors.ownerFirstName} />
               <Field id="ownerLastName" label="Owner Last Name" required value={values.ownerLastName} onChange={(event) => change('ownerLastName', event.target.value)} error={errors.ownerLastName} />
-              <Field id="date" label="Date of Birth" required type="date" value={values.date} onChange={(event) => change('date', event.target.value)} error={errors.date} />
-              <Field id="socialSecurityNumber" label="Social Security Number" required type="password" inputMode="numeric" value={values.socialSecurityNumber} onChange={(event) => change('socialSecurityNumber', digits(event.target.value, 9))} error={errors.socialSecurityNumber} />
+              <Field id="date" label="Date of Birth" required type="date" value={values.date} onChange={(event) => change('date', event.target.value)} error={errors.date} tooltip="Owner must be at least 18 years old to execute merchant agreements." />
+              <MaskedField
+                id="socialSecurityNumber"
+                label="Social Security Number (9 Digits)"
+                required
+                value={values.socialSecurityNumber}
+                onChange={(event) => change('socialSecurityNumber', digits(event.target.value, 9))}
+                placeholder="123456789"
+                maxLength={9}
+                inputMode="numeric"
+                error={errors.socialSecurityNumber}
+                tooltip="Required by federal banking laws for identity verification and anti-money laundering compliance."
+              />
             </div>
             <label className="mt-6 flex items-center gap-3 font-semibold text-slate-700">
               <input
@@ -1630,14 +1681,14 @@ export default function ApplicationFlow({ onComplete }) {
             </label>
             <div className="mt-6 grid gap-5 sm:grid-cols-2">
               <Field id="residentialAddress" label="Residential Address" required value={values.residentialAddress} onChange={(event) => change('residentialAddress', event.target.value)} error={errors.residentialAddress} />
-              <Field id="ownerShipZip" label="ZIP Code" required value={values.ownerShipZip} onChange={(event) => change('ownerShipZip', event.target.value)} error={errors.ownerShipZip} />
+              <Field id="ownerShipZip" label="ZIP Code" required value={values.ownerShipZip} onChange={(event) => change('ownerShipZip', digits(event.target.value, 5))} placeholder="78701" maxLength={5} error={errors.ownerShipZip} />
               <Field id="ownerShipCity" label="City" required value={values.ownerShipCity} onChange={(event) => change('ownerShipCity', event.target.value)} error={errors.ownerShipCity} />
               <SelectField id="ownerShipState" label="State" required value={values.ownerShipState} onChange={(event) => change('ownerShipState', event.target.value)} options={states} error={errors.ownerShipState} />
               <Field id="ownerPhoneNumber" label="Owner Phone Number" required value={values.ownerPhoneNumber} onChange={(event) => change('ownerPhoneNumber', phone(event.target.value))} error={errors.ownerPhoneNumber} />
               <Field id="ownerEmail" label="Owner Email" required type="email" value={values.ownerEmail} onChange={(event) => change('ownerEmail', event.target.value)} error={errors.ownerEmail} />
             </div>
             <div className="mt-6">
-              <Field id="dLFiles" label="Driver License or Government ID (Upload)" required error={errors.dLFiles}>
+              <Field id="dLFiles" label="Driver License or Government ID (Upload)" required error={errors.dLFiles} tooltip="Front and back photo of government-issued driver license or passport.">
                 <input
                   id="dLFiles"
                   type="file"
@@ -1650,37 +1701,68 @@ export default function ApplicationFlow({ onComplete }) {
           </>
         )}
 
-        {/* Step 3: Financial */}
+        {/* Step 3: Financial Information */}
         {step === 3 && (
           <>
             <StepTitle title="Financial information" description="Enter the settlement account and expected processing figures." />
             <div className="grid gap-5 sm:grid-cols-2">
-              <Field id="bankName" label="Bank Name" value={values.bankName} onChange={(event) => change('bankName', event.target.value)} />
-              <Field id="accountNumber" label="Account Number" required type="password" value={values.accountNumber} onChange={(event) => change('accountNumber', event.target.value)} error={errors.accountNumber} />
-              <Field id="routingNumber" label="Routing Number" required type="password" inputMode="numeric" value={values.routingNumber} onChange={(event) => change('routingNumber', digits(event.target.value, 9))} error={errors.routingNumber} />
-              <Field id="taxCode" label="Tax Exempt Code" type="password" value={values.taxCode} onChange={(event) => change('taxCode', event.target.value)} />
-              <Field id="bankFiles" label="Void Check or Bank Letter" required error={errors.bankFiles}>
-                <input
-                  id="bankFiles"
-                  type="file"
-                  multiple
-                  onChange={(event) => change('bankFiles', [...event.target.files])}
-                  className={`${formControlClasses} file:mr-4 file:rounded-lg file:border-0 file:bg-mist file:px-3 file:py-2 file:font-bold file:text-primary`}
-                />
-              </Field>
+              <Field id="bankName" label="Bank Name" value={values.bankName} onChange={(event) => change('bankName', event.target.value)} placeholder="e.g. Chase, Bank of America" />
+              <MaskedField
+                id="accountNumber"
+                label="Account Number"
+                required
+                value={values.accountNumber}
+                onChange={(event) => change('accountNumber', event.target.value)}
+                placeholder="Settlement checking account number"
+                error={errors.accountNumber}
+                tooltip="Settlement checking account where daily batch deposits will be credited."
+              />
+              <MaskedField
+                id="routingNumber"
+                label="Routing Number (9 Digits)"
+                required
+                value={values.routingNumber}
+                onChange={(event) => change('routingNumber', digits(event.target.value, 9))}
+                placeholder="9-digit bank routing number"
+                maxLength={9}
+                inputMode="numeric"
+                error={errors.routingNumber}
+                tooltip="9-digit ABA routing number identifying your financial institution."
+              />
+              <MaskedField
+                id="taxCode"
+                label="Tax Exempt Code (Optional)"
+                value={values.taxCode}
+                onChange={(event) => change('taxCode', event.target.value)}
+                placeholder="Exemption certificate code if applicable"
+                tooltip="Optional state or federal tax exemption certificate number."
+              />
+              <div className="sm:col-span-2">
+                <Field id="bankFiles" label="Void Check or Bank Letter" required error={errors.bankFiles} tooltip="Required by bank underwriting to verify account ownership and deposit routing.">
+                  <input
+                    id="bankFiles"
+                    type="file"
+                    multiple
+                    onChange={(event) => change('bankFiles', [...event.target.files])}
+                    className={`${formControlClasses} file:mr-4 file:rounded-lg file:border-0 file:bg-mist file:px-3 file:py-2 file:font-bold file:text-primary`}
+                  />
+                </Field>
+              </div>
               {solutions.some((solution) => saleSolutions.has(solution)) && (
                 <>
-                  <Field id="averageSale" label="Average Sale ($)" required type="number" min="0" step="0.01" value={values.averageSale} onChange={(event) => change('averageSale', event.target.value)} error={errors.averageSale} />
-                  <Field id="maxSale" label="Maximum Sale ($)" required type="number" min="0" step="0.01" value={values.maxSale} onChange={(event) => change('maxSale', event.target.value)} error={errors.maxSale} />
-                  <Field id="monthlySale" label="Estimated Monthly Volume ($)" required type="number" min="0" step="0.01" value={values.monthlySale} onChange={(event) => change('monthlySale', event.target.value)} error={errors.monthlySale} />
+                  <Field id="averageSale" label="Average Sale ($)" required type="number" min="0" step="0.01" value={values.averageSale} onChange={(event) => change('averageSale', event.target.value)} error={errors.averageSale} tooltip="Estimated average single transaction ticket amount in dollars." />
+                  <Field id="maxSale" label="Maximum Sale ($)" required type="number" min="0" step="0.01" value={values.maxSale} onChange={(event) => change('maxSale', event.target.value)} error={errors.maxSale} tooltip="Highest single transaction amount you expect to process." />
+                  <Field id="monthlySale" label="Estimated Monthly Volume ($)" required type="number" min="0" step="0.01" value={values.monthlySale} onChange={(event) => change('monthlySale', event.target.value)} error={errors.monthlySale} tooltip="Total expected credit card sales volume per month." />
                 </>
               )}
-              <Field id="comment" label="Comments / Notes" value={values.comment} onChange={(event) => change('comment', event.target.value)} />
+              <div className="sm:col-span-2">
+                <Field id="comment" label="Comments / Notes" value={values.comment} onChange={(event) => change('comment', event.target.value)} placeholder="Any special instructions or underwriting notes" />
+              </div>
             </div>
           </>
         )}
 
-        {/* Step 4: Plan */}
+        {/* Step 4: Plan Selection */}
         {step === 4 && (
           <>
             <StepTitle title="Select a plan" description="Choose one available pricing plan for each requested service." />
@@ -1691,6 +1773,8 @@ export default function ApplicationFlow({ onComplete }) {
                   (plan) => String(plan.service).toLowerCase() === application.solution.toLowerCase()
                 )
                 const currentPlan = plans[application.applicationId]
+                const normalizedCurrentPlan = (currentPlan || '').toLowerCase()
+
                 return (
                   <section key={application.applicationId} className="rounded-2xl border border-slate-200 p-5 sm:p-6">
                     <h3 className="mb-4 text-lg font-extrabold capitalize text-navy">
@@ -1699,6 +1783,11 @@ export default function ApplicationFlow({ onComplete }) {
                     <div className="grid gap-4 sm:grid-cols-2">
                       {available.map((plan) => {
                         const isSelected = currentPlan === plan.name
+                        const planKey = (plan.name || '').toLowerCase().trim()
+                        const override = planOverrides[planKey]
+                        const planTitle = override?.name || plan.name
+                        const planDesc = override?.description || plan.description
+
                         return (
                           <button
                             type="button"
@@ -1707,12 +1796,12 @@ export default function ApplicationFlow({ onComplete }) {
                             className={`flex flex-col justify-between rounded-2xl border p-5 text-left transition ${isSelected ? 'border-primary bg-mist shadow-sm' : 'border-slate-200 hover:border-primary/50'}`}
                           >
                             <div className="flex items-start justify-between gap-3">
-                              <strong className="text-navy">{plan.name}</strong>
+                              <strong className="text-navy text-base">{planTitle}</strong>
                               <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full border ${isSelected ? 'border-primary bg-primary text-white' : 'border-slate-300'}`}>
                                 {isSelected && <Check size={14} />}
                               </span>
                             </div>
-                            <p className="mt-2 text-sm leading-6 text-slate-600">{plan.description}</p>
+                            <p className="mt-2 text-sm leading-6 text-slate-600">{planDesc}</p>
                           </button>
                         )
                       })}
@@ -1722,6 +1811,98 @@ export default function ApplicationFlow({ onComplete }) {
                         </p>
                       )}
                     </div>
+
+                    {/* ATM Plan Conditional Flow */}
+                    {application.solution === 'atm' && (normalizedCurrentPlan.includes('owner') || normalizedCurrentPlan.includes('placement')) && (
+                      <div className="mt-8 rounded-2xl border border-primary/20 bg-slate-50/70 p-5 sm:p-6 space-y-5">
+                        <div className="flex items-center gap-2">
+                          <Banknote size={20} className="text-primary" />
+                          <h4 className="text-base font-extrabold text-navy">
+                            ATM Configuration & Requirements ({normalizedCurrentPlan.includes('owner') ? 'Ownership' : 'Placement'})
+                          </h4>
+                        </div>
+
+                        <div className="grid gap-5 sm:grid-cols-2">
+                          <SelectField
+                            id="atmInternetPlan"
+                            label="Internet / Data Plan"
+                            required
+                            value={values.atmInternetPlan}
+                            onChange={(e) => change('atmInternetPlan', e.target.value)}
+                            options={[
+                              'Wireless Cellular Data ($15/month)',
+                              'Merchant High-Speed Internet (Free)',
+                              'Standard Phone Line',
+                            ]}
+                            error={errors.atmInternetPlan}
+                            tooltip="Connectivity method required for ATM transaction authorization."
+                          />
+
+                          {normalizedCurrentPlan.includes('owner') && (
+                            <>
+                              <Field
+                                id="atmSurchargeAmount"
+                                label="Surcharge Amount ($)"
+                                required
+                                value={values.atmSurchargeAmount}
+                                onChange={(e) => change('atmSurchargeAmount', e.target.value)}
+                                placeholder="3.00"
+                                error={errors.atmSurchargeAmount}
+                                tooltip="Fee charged to ATM cardholders per cash withdrawal."
+                              />
+                              <SelectField
+                                id="atmOwnershipOption"
+                                label="ATM Ownership Option"
+                                required
+                                value={values.atmOwnershipOption}
+                                onChange={(e) => change('atmOwnershipOption', e.target.value)}
+                                options={[
+                                  'Buy New ATM from Dolphin',
+                                  'Use Existing ATM Machine',
+                                  'Rent to Own Program',
+                                ]}
+                                error={errors.atmOwnershipOption}
+                                tooltip="Method of ATM machine procurement."
+                              />
+                              <SelectField
+                                id="atmModel"
+                                label="ATM Model"
+                                required
+                                value={values.atmModel}
+                                onChange={(e) => change('atmModel', e.target.value)}
+                                options={[
+                                  'Hyosung Halo II',
+                                  'Genmega G2500',
+                                  'Hantle 1700W',
+                                  'Genmega Onyx',
+                                  'Other Approved Model',
+                                ]}
+                                error={errors.atmModel}
+                                tooltip="ATM hardware manufacturer and model designation."
+                              />
+                            </>
+                          )}
+
+                          {normalizedCurrentPlan.includes('placement') && (
+                            <SelectField
+                              id="atmEstimatedMonthlyTransactions"
+                              label="Estimated Monthly ATM Transactions"
+                              required
+                              value={values.atmEstimatedMonthlyTransactions}
+                              onChange={(e) => change('atmEstimatedMonthlyTransactions', e.target.value)}
+                              options={[
+                                '100 - 250 transactions/mo',
+                                '250 - 500 transactions/mo',
+                                '500 - 1000 transactions/mo',
+                                '1000+ transactions/mo',
+                              ]}
+                              error={errors.atmEstimatedMonthlyTransactions}
+                              tooltip="Estimated foot traffic withdrawals for placement program qualification."
+                            />
+                          )}
+                        </div>
+                      </div>
+                    )}
                   </section>
                 )
               })}
@@ -1729,15 +1910,42 @@ export default function ApplicationFlow({ onComplete }) {
           </>
         )}
 
-        {/* Step 5: Hardware */}
+        {/* Step 5: Hardware Selection */}
         {step === 5 && (
           <>
             <StepTitle title="Hardware and equipment" description="Select the products you need, or tell us you already have compatible hardware." />
             {errors.products && <p tabIndex="-1" data-error="true" className="mb-4 font-bold text-rose-600">{errors.products}</p>}
+
+            {/* Hardware Live Search Bar */}
+            <div className="relative mb-6">
+              <Search size={18} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+              <input
+                type="text"
+                placeholder="Search hardware by device name (PAX, Clover, printer, scanner...)"
+                value={hardwareSearch}
+                onChange={(e) => setHardwareSearch(e.target.value)}
+                className="w-full rounded-xl border border-slate-200 bg-slate-50/70 py-3 pl-10 pr-10 text-sm font-medium text-navy placeholder:text-slate-400 focus:border-primary focus:bg-white focus:outline-none focus:ring-2 focus:ring-primary/20"
+              />
+              {hardwareSearch && (
+                <button
+                  type="button"
+                  onClick={() => setHardwareSearch('')}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full p-1 text-slate-400 hover:bg-slate-200 hover:text-slate-700"
+                >
+                  <X size={14} />
+                </button>
+              )}
+            </div>
+
             <div className="space-y-9">
               {applications.map((application) => {
                 const selection = products[application.applicationId] || { own: false, items: {} }
-                const available = catalog.products.filter((product) => product.category?.solution === application.solution)
+                let available = catalog.products.filter((product) => product.category?.solution === application.solution)
+                if (hardwareSearch.trim()) {
+                  const q = hardwareSearch.toLowerCase().trim()
+                  available = available.filter((p) => (p.name + ' ' + (p.description || '')).toLowerCase().includes(q))
+                }
+
                 return (
                   <section key={application.applicationId} className="rounded-2xl border border-slate-200 p-5 sm:p-6">
                     <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
@@ -1804,7 +2012,7 @@ export default function ApplicationFlow({ onComplete }) {
                         })}
                         {!available.length && (
                           <p className="col-span-full rounded-xl bg-mist p-4 text-sm font-semibold text-slate-600">
-                            No equipment items required for this service.
+                            {hardwareSearch ? 'No equipment matching your search.' : 'No equipment items required for this service.'}
                           </p>
                         )}
                       </div>
@@ -1884,7 +2092,7 @@ export default function ApplicationFlow({ onComplete }) {
           </>
         )}
 
-        {/* Step 7: Delivery & Payment */}
+        {/* Step 7: Delivery & Payment (Auto Pre-filled) */}
         {step === 7 && (
           <>
             <StepTitle title="Delivery and payment" description="Choose how each equipment order should be fulfilled and paid." />
@@ -2004,7 +2212,7 @@ export default function ApplicationFlow({ onComplete }) {
                       </div>
                     )}
 
-                    {/* Shipping Form */}
+                    {/* Shipping Form (Pre-populated) */}
                     {form.type === 'Shipping' && !ownHardware && (
                       <div className="mt-6 grid gap-5 sm:grid-cols-2">
                         <Field id={`recipient-${application.applicationId}`} label="Recipient Name" required value={form.recipientName} onChange={(event) => setShipment(application.applicationId, 'recipientName', event.target.value)} />
@@ -2015,7 +2223,7 @@ export default function ApplicationFlow({ onComplete }) {
                         <Field id={`shipping-floor-${application.applicationId}`} label="Floor / Suite / Street 2" value={form.floorStreet} onChange={(event) => setShipment(application.applicationId, 'floorStreet', event.target.value)} />
                         <Field id={`shipping-city-${application.applicationId}`} label="City" required value={form.city} onChange={(event) => setShipment(application.applicationId, 'city', event.target.value)} />
                         <SelectField id={`shipping-state-${application.applicationId}`} label="State" required value={form.state} onChange={(event) => setShipment(application.applicationId, 'state', event.target.value)} options={states} />
-                        <Field id={`shipping-zip-${application.applicationId}`} label="ZIP Code" required value={form.zipCode} onChange={(event) => setShipment(application.applicationId, 'zipCode', event.target.value)} />
+                        <Field id={`shipping-zip-${application.applicationId}`} label="ZIP Code" required value={form.zipCode} onChange={(event) => setShipment(application.applicationId, 'zipCode', digits(event.target.value, 5))} placeholder="78701" maxLength={5} />
                       </div>
                     )}
 
@@ -2162,7 +2370,7 @@ export default function ApplicationFlow({ onComplete }) {
                             </div>
                             <div className="flex flex-wrap items-center gap-2">
                               {!isSigned && (
-                                <Button type="button" size="sm" onClick={() => handleReviewAndSign(appId)}>
+                                <Button type="button" size="sm" onClick={() => handleOpenPdfModal(appId)}>
                                   <PencilLine size={15} /> Review & Sign
                                 </Button>
                               )}
@@ -2194,7 +2402,6 @@ export default function ApplicationFlow({ onComplete }) {
                       <label className="mt-6 flex cursor-pointer items-start gap-3 text-sm font-bold text-slate-700">
                         <input
                           type="checkbox"
-                          data-terms-checkbox="true"
                           checked={isChecked}
                           onChange={(e) => {
                             const checked = e.target.checked
@@ -2214,6 +2421,19 @@ export default function ApplicationFlow({ onComplete }) {
                     </section>
                   )
                 })}
+
+                {/* Official Google reCAPTCHA Security Verification */}
+                <GoogleRecaptcha
+                  onVerify={() => {
+                    setIsRobotVerified(true)
+                    setErrors((prev) => ({ ...prev, recaptcha: '' }))
+                    setError('')
+                  }}
+                  onExpire={() => {
+                    setIsRobotVerified(false)
+                  }}
+                  error={errors.recaptcha}
+                />
               </div>
             )}
             {errors.accepted && (
@@ -2265,33 +2485,14 @@ export default function ApplicationFlow({ onComplete }) {
         onToggleSummary={() => setViewingSummary(!viewingSummary)}
         onDownloadSummary={() => activeAppId && downloadAgreementSummary(activeAppId)}
         onOpenSignModal={() => {
-          const uncheckedApp = applications.find((app) => !checkedByApp[app.applicationId])
-          if (uncheckedApp) {
-            setError(`Please agree to all terms and conditions for ${getServiceLabel(uncheckedApp.solution)} before signing.`)
-            return
-          }
           setIsPdfModalOpen(false)
           setShowSignatureModal(true)
         }}
         onSubmitFinal={() => {
-          const uncheckedApp = applications.find((app) => !checkedByApp[app.applicationId])
-          if (uncheckedApp) {
-            setError(`Please agree to all terms and conditions before submitting.`)
-            return
-          }
           setIsPdfModalOpen(false)
           submitFinalApplications()
         }}
         isAllSigned={activeIsAllSigned}
-        applications={applications}
-        checkedByApp={checkedByApp}
-        onToggleChecked={(appId, checked) => {
-          setCheckedByApp((prev) => ({ ...prev, [appId]: checked }))
-          if (checked) {
-            setErrors((prev) => ({ ...prev, accepted: '' }))
-            setError('')
-          }
-        }}
       />
 
       {/* Signature Canvas / Typed Signature Modal */}

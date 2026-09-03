@@ -71,7 +71,31 @@ export async function saveApplication(body) {
   return applicationRequest('application', { method: 'POST', body: { ...body, agentId: getCustomerAgentId() } })
 }
 
+const allowedMimeTypes = new Set([
+  'image/png',
+  'image/jpeg',
+  'image/jpg',
+  'image/webp',
+  'application/pdf',
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+])
+
 export async function uploadApplicationFile(file, type) {
+  if (!file) {
+    throw new Error('No file provided for upload.')
+  }
+
+  // Max 10MB file limit
+  if (file.size > 10 * 1024 * 1024) {
+    throw new Error(`File ${file.name || ''} exceeds the 10MB upload limit.`)
+  }
+
+  // MIME type validation
+  if (file.type && !allowedMimeTypes.has(file.type)) {
+    throw new Error('Invalid file type. Allowed formats: PNG, JPG, PDF, DOC, DOCX.')
+  }
+
   const body = new FormData()
   body.append('file', file)
   body.append('type', type)

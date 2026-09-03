@@ -24,3 +24,19 @@ server/.env
 *.njsproj
 *.sln
 *.sw?
+
+# Security Audit Reports & Internal Notes
+SECURITY_AUDIT_REPORT.md
+*audit*
+*AUDIT*
+
+# Secrets, Certificates & Keys
+*.pem
+*.key
+*.crt
+*.pfx
+*.p12
+.env*.local
+.env.production
+.env.staging
+.env.test

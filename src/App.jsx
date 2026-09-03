@@ -83,6 +83,8 @@ const router = createBrowserRouter([
               categoryPath="all"
               heroTitle="Complete POS Hardware & Payment Terminals"
               description="Explore our complete commercial catalog of point-of-sale systems, wireless payment terminals, barcode scanners, receipt printers, and accessories."
+              heroImage="/store-banners/store-main-banner.png"
+              heroImageAlt="Complete POS Hardware and Payment Terminals"
             />
           </SuspenseWrapper>
         ),

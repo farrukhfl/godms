@@ -7,6 +7,8 @@ export const storeContent = {
       'Before ordering, a Dolphin specialist can help confirm processor compatibility, connection type, payment features, and receipt requirements. Product availability and programming options depend on your merchant account and selected processing platform.',
     ],
     metaDescription: 'Shop countertop, wireless, mobile, and smart payment terminals for secure EMV, contactless, swipe, and PIN debit transactions.',
+    heroImage: '/store-banners/terminals-banner.png',
+    heroImageAlt: 'Payment terminals and PIN pads for countertop and mobile checkout',
   },
   '/store/accessories': {
     heroTitle: 'The cables and accessories that keep checkout connected',
@@ -16,6 +18,8 @@ export const storeContent = {
       'Connector types and voltage requirements vary by manufacturer and device generation. Confirm your exact model number with our team before purchasing so we can help prevent compatibility issues.',
     ],
     metaDescription: 'Browse compatible terminal stands, power supplies, communication cables, and replacement accessories for payment and POS equipment.',
+    heroImage: '/store-banners/accessories-banner.png',
+    heroImageAlt: 'Cables, power supplies, terminal stands, and hardware accessories',
   },
   '/store/atm-accessories': {
     heroTitle: 'ATM equipment and supplies for dependable cash access',
@@ -25,6 +29,8 @@ export const storeContent = {
       'ATM requirements vary by placement, transaction volume, processor, and vault configuration. Our team can help review specifications and program compatibility before an equipment purchase or replacement.',
     ],
     metaDescription: 'Explore retail ATMs, ATM receipt paper, mounting hardware, signage, and accessories for eligible commercial locations.',
+    heroImage: '/store-banners/atm-accessories-banner.png',
+    heroImageAlt: 'ATM equipment, cash dispensers, signage, and ATM accessories',
   },
   '/store/barcode-scanners': {
     heroTitle: 'Scan products faster and keep checkout accurate',
@@ -34,6 +40,8 @@ export const storeContent = {
       'We can help match scanner connectivity and capabilities with your POS hardware and software. Compatibility should be confirmed before purchase, especially for 2D codes, mobile-screen scanning, and wireless operation.',
     ],
     metaDescription: 'Shop wired, wireless, handheld, 2D, and presentation barcode scanners for compatible retail POS and inventory workflows.',
+    heroImage: '/store-banners/barcode-scanners-banner.png',
+    heroImageAlt: 'Handheld, 2D, and presentation barcode scanners for retail inventory',
   },
   '/store/clover': {
     heroTitle: 'Clover hardware and accessories for a connected counter',
@@ -43,6 +51,8 @@ export const storeContent = {
       'Clover equipment generally requires compatible processing and account activation. Speak with our team before purchasing to confirm device availability, application requirements, and the processing relationship connected to your setup.',
     ],
     metaDescription: 'Explore Clover Station, Mini, Flex, customer displays, and compatible accessories for countertop and mobile point-of-sale setups.',
+    heroImage: '/store-banners/clover-banner.png',
+    heroImageAlt: 'Clover Station, Clover Mini, Clover Flex, and Clover POS accessories',
   },
   '/store/pos': {
     heroTitle: 'Point-of-sale systems built around how you sell',
@@ -52,6 +62,8 @@ export const storeContent = {
       'Our team helps map those workflows before recommending equipment. Packages shown here are starting points and can be adjusted for peripherals, software subscriptions, processing compatibility, and installation needs.',
     ],
     metaDescription: 'Compare complete retail, restaurant, service, and dual-screen point-of-sale system packages for growing businesses.',
+    heroImage: '/store-banners/pos-banner.png',
+    heroImageAlt: 'Point-of-sale workstations, dual-screen systems, and touchscreen registers',
   },
   '/store/pos-equipment': {
     heroTitle: 'POS equipment for a complete checkout workspace',
@@ -61,6 +73,8 @@ export const storeContent = {
       'Mounting, ports, operating systems, and software support differ across devices. We recommend confirming the full equipment stack before ordering individual components.',
     ],
     metaDescription: 'Shop touchscreen monitors, cash drawers, customer displays, and workstation equipment for compatible POS configurations.',
+    heroImage: '/store-banners/pos-equipment-banner.png',
+    heroImageAlt: 'Commercial POS equipment, cash drawers, scales, and customer displays',
   },
   '/store/printers': {
     heroTitle: 'Fast, reliable printers for receipts and order tickets',
@@ -70,6 +84,8 @@ export const storeContent = {
       'Dolphin can help identify printers that work with your POS and intended workflow. Always confirm interface and driver compatibility before replacing or adding a device.',
     ],
     metaDescription: 'Browse thermal receipt, kitchen impact, mobile Bluetooth, and label printers for compatible POS and order workflows.',
+    heroImage: '/store-banners/printers-banner.png',
+    heroImageAlt: 'High-speed thermal receipt printers, kitchen printers, and impact printers',
   },
   '/store/paper-ink': {
     heroTitle: 'Stock the receipt paper and printer supplies you use daily',
@@ -79,5 +95,7 @@ export const storeContent = {
       'Roll dimensions, core size, thermal coating, and ribbon model must match the printer. Check your equipment model or ask our team to confirm compatibility before ordering a case.',
     ],
     metaDescription: 'Order compatible thermal receipt paper, terminal rolls, kitchen printer ribbons, and ATM paper supplies for business equipment.',
+    heroImage: '/store-banners/paper-ink-banner.png',
+    heroImageAlt: 'Thermal receipt paper rolls, printer ribbons, ink cartridges, and supplies',
   },
 }
