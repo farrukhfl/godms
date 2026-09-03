@@ -577,59 +577,8 @@ function PdfReviewModal({
   const activeDoc = documents[activeDocIndex] || null
   const rawUrl = viewingSummary && summaryUrl ? summaryUrl : activeDoc?.url
   const safeDirectUrl = useMemo(() => String(rawUrl || '').replace(/^http:\/\//i, 'https://'), [rawUrl])
-  const googleViewerUrl = useMemo(() => {
-    if (!safeDirectUrl) return null
-    return `https://docs.google.com/viewer?url=${encodeURIComponent(safeDirectUrl)}&embedded=true`
-  }, [safeDirectUrl])
-
-  const [blobUrl, setBlobUrl] = useState(null)
-  const [loadingPdf, setLoadingPdf] = useState(false)
-  const [loadFailed, setLoadFailed] = useState(false)
-
-  useEffect(() => {
-    if (!isOpen || !safeDirectUrl) {
-      setBlobUrl(null)
-      return
-    }
-
-    let isMounted = true
-    let currentCreatedUrl = null
-    setLoadingPdf(true)
-    setLoadFailed(false)
-
-    // Convert PDF to same-origin Blob URL to completely bypass iframe cross-origin / X-Frame-Options blocking on Vercel
-    fetch(safeDirectUrl)
-      .then(async (res) => {
-        if (!res.ok) throw new Error('Failed to load PDF')
-        const blob = await res.blob()
-        const pdfBlob = new Blob([blob], { type: 'application/pdf' })
-        const objUrl = URL.createObjectURL(pdfBlob)
-        currentCreatedUrl = objUrl
-        if (isMounted) {
-          setBlobUrl(objUrl)
-          setLoadingPdf(false)
-        }
-      })
-      .catch(() => {
-        if (isMounted) {
-          // If blob fetch is blocked by CORS or network, fallback to Google Cloud Viewer to avoid X-Frame-Options block
-          setBlobUrl(googleViewerUrl)
-          setLoadingPdf(false)
-          setLoadFailed(true)
-        }
-      })
-
-    return () => {
-      isMounted = false
-      if (currentCreatedUrl && currentCreatedUrl.startsWith('blob:')) {
-        URL.revokeObjectURL(currentCreatedUrl)
-      }
-    }
-  }, [isOpen, safeDirectUrl, googleViewerUrl])
 
   if (!isOpen) return null
-
-  const displayUrl = blobUrl || googleViewerUrl || safeDirectUrl
 
   return (
     <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-900/60 p-3 sm:p-6 backdrop-blur-sm">
@@ -696,33 +645,13 @@ function PdfReviewModal({
 
         {/* PDF Viewer */}
         <div className="relative min-h-0 flex-1 bg-slate-100 p-2 sm:p-4">
-          {loadingPdf ? (
-            <div className="flex h-full flex-col items-center justify-center gap-3">
-              <LoaderCircle className="animate-spin text-primary" size={38} />
-              <p className="text-sm font-bold text-navy">Loading agreement document...</p>
-            </div>
-          ) : displayUrl ? (
-            <div className="h-full w-full relative">
-              <iframe
-                key={displayUrl}
-                src={`${displayUrl}#toolbar=1&navpanes=0&view=FitH`}
-                title={viewingSummary ? 'Agreement Summary' : activeDoc?.title || 'Agreement'}
-                className="h-full w-full rounded-xl border border-slate-200 bg-white"
-              />
-              {loadFailed && (
-                <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-10 flex items-center gap-2 rounded-xl bg-navy/90 text-white px-4 py-2 text-xs font-bold shadow-lg backdrop-blur">
-                  <span>If preview is restricted by browser:</span>
-                  <a
-                    href={safeDirectUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="underline text-accent hover:text-white"
-                  >
-                    Click to Open in Tab
-                  </a>
-                </div>
-              )}
-            </div>
+          {safeDirectUrl ? (
+            <iframe
+              key={safeDirectUrl}
+              src={`${safeDirectUrl}#toolbar=1&navpanes=0&view=FitH`}
+              title={viewingSummary ? 'Agreement Summary' : activeDoc?.title || 'Agreement'}
+              className="h-full w-full rounded-xl border border-slate-200 bg-white"
+            />
           ) : (
             <div className="flex h-full items-center justify-center text-sm font-semibold text-slate-500">
               No document preview available.

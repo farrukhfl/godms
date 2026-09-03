@@ -38,7 +38,7 @@ app.disable('x-powered-by')
 // Enable trust proxy for accurate rate-limiting when deployed behind proxies/load balancers
 app.set('trust proxy', 1)
 
-// Standard & Advanced HTTP security headers (including CSP and HSTS)
+// Standard HTTP security headers
 app.use((req, res, next) => {
   // Reject excessively long URLs (DoS prevention)
   if (req.url.length > 2048) {
@@ -46,22 +46,7 @@ app.use((req, res, next) => {
   }
 
   res.setHeader('X-Content-Type-Options', 'nosniff')
-  res.setHeader('X-Frame-Options', 'SAMEORIGIN')
-  res.setHeader('X-XSS-Protection', '1; mode=block')
   res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin')
-  res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()')
-  res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains; preload')
-  res.setHeader(
-    'Content-Security-Policy',
-    "default-src 'self'; " +
-    "script-src 'self' 'unsafe-inline' https://www.google.com https://www.gstatic.com; " +
-    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; " +
-    "font-src 'self' https://fonts.gstatic.com data:; " +
-    "img-src 'self' data: https: blob:; " +
-    "connect-src 'self' blob: data: https://pos.gotmsolutions.com https://*.gotmsolutions.com https://dev-derps.gotmsolutions.com https://testing.godms.com https://*.amazonaws.com https://www.google.com https://docs.google.com; " +
-    "frame-src 'self' blob: data: https://docs.google.com https://drive.google.com https://pos.gotmsolutions.com https://*.gotmsolutions.com https://dev-derps.gotmsolutions.com https://testing.godms.com https://*.amazonaws.com https://www.google.com https://recaptcha.google.com; " +
-    "object-src 'self' blob: data: https://pos.gotmsolutions.com https://*.gotmsolutions.com https://docs.google.com;"
-  )
   next()
 })
 
