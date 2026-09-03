@@ -30,7 +30,6 @@ export default function GoogleRecaptcha({ onVerify, onExpire, error }) {
               },
             })
             widgetIdRef.current = id
-            setIsRendered(true)
           } catch {
             // Already rendered or widget mounted
           }
@@ -61,10 +60,13 @@ export default function GoogleRecaptcha({ onVerify, onExpire, error }) {
   }, [siteKey, onVerify, onExpire])
 
   return (
-    <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 sm:p-5">
-      <p className="mb-3 text-xs font-extrabold uppercase tracking-wider text-navy">
-        Security Verification
-      </p>
+    <div id="google-recaptcha-wrapper" className={`rounded-2xl border p-4 sm:p-5 transition ${error ? 'border-rose-300 bg-rose-50/50' : 'border-slate-200 bg-slate-50'}`}>
+      <div className="flex items-center justify-between mb-3">
+        <p className="text-xs font-extrabold uppercase tracking-wider text-navy">
+          Security Verification <span className="text-primary">*</span>
+        </p>
+        <span className="text-xs font-bold text-slate-500">Required</span>
+      </div>
       <div className="overflow-x-auto">
         <div ref={containerRef} className="min-h-[78px]" />
       </div>

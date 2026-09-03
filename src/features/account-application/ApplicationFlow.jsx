@@ -8,6 +8,7 @@ import {
   CircleDollarSign,
   CreditCard,
   Download,
+  ExternalLink,
   Eye,
   EyeOff,
   FileCheck2,
@@ -573,10 +574,58 @@ function PdfReviewModal({
   onSubmitFinal,
   isAllSigned,
 }) {
+  const activeDoc = documents[activeDocIndex] || null
+  const rawUrl = viewingSummary && summaryUrl ? summaryUrl : activeDoc?.url
+  const safeDirectUrl = useMemo(() => String(rawUrl || '').replace(/^http:\/\//i, 'https://'), [rawUrl])
+
+  const [blobUrl, setBlobUrl] = useState(null)
+  const [loadingPdf, setLoadingPdf] = useState(false)
+  const [loadFailed, setLoadFailed] = useState(false)
+
+  useEffect(() => {
+    if (!isOpen || !safeDirectUrl) {
+      setBlobUrl(null)
+      return
+    }
+
+    let isMounted = true
+    let currentCreatedUrl = null
+    setLoadingPdf(true)
+    setLoadFailed(false)
+
+    // Convert PDF to same-origin Blob URL to completely bypass iframe cross-origin / X-Frame-Options blocking on Vercel
+    fetch(safeDirectUrl)
+      .then(async (res) => {
+        if (!res.ok) throw new Error('Failed to load PDF')
+        const blob = await res.blob()
+        const pdfBlob = new Blob([blob], { type: 'application/pdf' })
+        const objUrl = URL.createObjectURL(pdfBlob)
+        currentCreatedUrl = objUrl
+        if (isMounted) {
+          setBlobUrl(objUrl)
+          setLoadingPdf(false)
+        }
+      })
+      .catch(() => {
+        if (isMounted) {
+          // If blob fetch is blocked by CORS, fallback to direct URL
+          setBlobUrl(safeDirectUrl)
+          setLoadingPdf(false)
+          setLoadFailed(true)
+        }
+      })
+
+    return () => {
+      isMounted = false
+      if (currentCreatedUrl && currentCreatedUrl.startsWith('blob:')) {
+        URL.revokeObjectURL(currentCreatedUrl)
+      }
+    }
+  }, [isOpen, safeDirectUrl])
+
   if (!isOpen) return null
 
-  const activeDoc = documents[activeDocIndex] || null
-  const currentUrl = viewingSummary && summaryUrl ? summaryUrl : activeDoc?.url
+  const displayUrl = blobUrl || safeDirectUrl
 
   return (
     <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-900/60 p-3 sm:p-6 backdrop-blur-sm">
@@ -600,6 +649,16 @@ function PdfReviewModal({
           </div>
 
           <div className="flex items-center gap-3">
+            {safeDirectUrl && (
+              <a
+                href={safeDirectUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="hidden sm:inline-flex items-center gap-1 text-xs font-bold text-primary hover:underline px-2 py-1 rounded-lg bg-mist"
+              >
+                <ExternalLink size={13} /> Open in New Tab
+              </a>
+            )}
             {!viewingSummary && documents.length > 1 && (
               <div className="flex items-center gap-2 rounded-xl bg-slate-100 p-1 text-xs font-bold text-slate-700">
                 <button
@@ -632,14 +691,34 @@ function PdfReviewModal({
         </div>
 
         {/* PDF Viewer */}
-        <div className="min-h-0 flex-1 bg-slate-100 p-2 sm:p-4">
-          {currentUrl ? (
-            <iframe
-              key={currentUrl}
-              src={`${currentUrl}#toolbar=1&navpanes=0&view=FitH`}
-              title={viewingSummary ? 'Agreement Summary' : activeDoc?.title || 'Agreement'}
-              className="h-full w-full rounded-xl border border-slate-200 bg-white"
-            />
+        <div className="relative min-h-0 flex-1 bg-slate-100 p-2 sm:p-4">
+          {loadingPdf ? (
+            <div className="flex h-full flex-col items-center justify-center gap-3">
+              <LoaderCircle className="animate-spin text-primary" size={38} />
+              <p className="text-sm font-bold text-navy">Loading agreement document...</p>
+            </div>
+          ) : displayUrl ? (
+            <div className="h-full w-full relative">
+              <iframe
+                key={displayUrl}
+                src={`${displayUrl}#toolbar=1&navpanes=0&view=FitH`}
+                title={viewingSummary ? 'Agreement Summary' : activeDoc?.title || 'Agreement'}
+                className="h-full w-full rounded-xl border border-slate-200 bg-white"
+              />
+              {loadFailed && (
+                <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-10 flex items-center gap-2 rounded-xl bg-navy/90 text-white px-4 py-2 text-xs font-bold shadow-lg backdrop-blur">
+                  <span>If preview is restricted by browser:</span>
+                  <a
+                    href={safeDirectUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="underline text-accent hover:text-white"
+                  >
+                    Click to Open in Tab
+                  </a>
+                </div>
+              )}
+            </div>
           ) : (
             <div className="flex h-full items-center justify-center text-sm font-semibold text-slate-500">
               No document preview available.
@@ -807,7 +886,7 @@ function validate(step, values, selectedSolutions, plans, products, shipments, c
       errors.accepted = `Please agree to the terms and conditions for ${getServiceLabel(uncheckedApp.solution)} before submitting.`
     }
     if (!isRobotVerified) {
-      errors.recaptcha = 'Please complete the security verification challenge.'
+      errors.recaptcha = 'Please complete the Google reCAPTCHA security verification challenge.'
     }
   }
 
@@ -1367,6 +1446,17 @@ export default function ApplicationFlow({ onComplete }) {
   }
 
   const submitFinalApplications = async () => {
+    if (!isRobotVerified) {
+      const msg = 'Please complete the Google reCAPTCHA security verification challenge.'
+      setError(msg)
+      setErrors((prev) => ({ ...prev, recaptcha: msg }))
+      requestAnimationFrame(() => {
+        const captchaEl = document.getElementById('google-recaptcha-wrapper')
+        captchaEl?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      })
+      return
+    }
+
     setLoading(true)
     setError('')
     try {
