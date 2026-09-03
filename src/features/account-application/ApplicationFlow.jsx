@@ -57,15 +57,15 @@ const steps = [
   ['Submit', PenLine],
 ]
 
-// Alphabetical sequence (A to Z) starting with 'A' (ACH, AIRVAC, ATM) and placing Credit Card and ATM before POS
+// Sequence: 1. Credit Card, 2. ATM, 3. Point of Sale, and then other services
 const serviceOrder = [
+  'credit-card',
+  'atm',
+  'pos',
+  'cash-advance',
+  'ebt',
   'ach-processing',
   'airvac',
-  'atm',
-  'cash-advance',
-  'credit-card',
-  'ebt',
-  'pos',
   'website',
 ]
 
