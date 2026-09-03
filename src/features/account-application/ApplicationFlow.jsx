@@ -33,6 +33,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import Button from '../../components/ui/Button'
 import FormField, { formControlClasses } from '../../components/ui/FormField'
 import GoogleRecaptcha from '../../components/ui/GoogleRecaptcha'
+import { getProductImageUrl } from '../../utils/productImages'
 import {
   applicationRequest,
   dataUrlToFile,
@@ -1992,43 +1993,65 @@ export default function ApplicationFlow({ onComplete }) {
                         {available.map((product) => {
                           const quantity = selection.items[product.id] || 0
                           const price = Number(product.sellingPrice ?? product.price ?? 0)
+                          const imageUrl = getProductImageUrl(product)
+
                           return (
-                            <div key={product.id} className={`rounded-2xl border p-5 transition ${quantity ? 'border-primary bg-mist shadow-sm' : 'border-slate-200'}`}>
-                              <div className="flex justify-between gap-4">
-                                <div>
-                                  <strong className="text-navy">{product.name}</strong>
-                                  <p className="mt-1 font-bold text-primary">${price.toFixed(2)}</p>
+                            <div key={product.id} className={`flex flex-col justify-between rounded-2xl border p-4 sm:p-5 transition ${quantity ? 'border-primary bg-mist shadow-sm' : 'border-slate-200 bg-white'}`}>
+                              <div className="flex gap-3.5 items-start">
+                                <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-xl border border-slate-100 bg-slate-50 p-1 overflow-hidden">
+                                  <img
+                                    src={imageUrl}
+                                    alt={product.name}
+                                    onError={(e) => {
+                                      e.currentTarget.src = getProductImageUrl(product)
+                                    }}
+                                    className="max-h-full max-w-full object-contain"
+                                  />
                                 </div>
-                                <span className="text-xs font-bold text-slate-500">{isItemInStock(product) ? 'In stock' : 'Special order'}</span>
+                                <div className="min-w-0 flex-1">
+                                  <div className="flex items-start justify-between gap-2">
+                                    <strong className="block truncate text-sm font-extrabold text-navy" title={product.name}>
+                                      {product.name}
+                                    </strong>
+                                    <span className={`inline-flex shrink-0 items-center rounded-full px-2 py-0.5 text-[10px] font-bold ${isItemInStock(product) ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-slate-100 text-slate-600'}`}>
+                                      {isItemInStock(product) ? 'In stock' : 'Special order'}
+                                    </span>
+                                  </div>
+                                  <p className="mt-1 font-black text-primary text-base">${price.toFixed(2)}</p>
+                                </div>
                               </div>
-                              <div className="mt-4 flex items-center gap-3">
-                                <button
-                                  type="button"
-                                  className="flex h-9 w-9 items-center justify-center rounded-lg border bg-white font-bold hover:bg-slate-50"
-                                  onClick={() => setProducts((current) => ({
-                                    ...current,
-                                    [application.applicationId]: {
-                                      ...selection,
-                                      items: { ...selection.items, [product.id]: Math.max(0, quantity - 1) },
-                                    },
-                                  }))}
-                                >
-                                  -
-                                </button>
-                                <span className="w-8 text-center font-bold text-navy">{quantity}</span>
-                                <button
-                                  type="button"
-                                  className="flex h-9 w-9 items-center justify-center rounded-lg border bg-white font-bold hover:bg-slate-50"
-                                  onClick={() => setProducts((current) => ({
-                                    ...current,
-                                    [application.applicationId]: {
-                                      ...selection,
-                                      items: { ...selection.items, [product.id]: quantity + 1 },
-                                    },
-                                  }))}
-                                >
-                                  +
-                                </button>
+
+                              <div className="mt-4 flex items-center justify-between border-t border-slate-100 pt-3">
+                                <span className="text-xs font-bold text-slate-500">Select Quantity:</span>
+                                <div className="flex items-center gap-2">
+                                  <button
+                                    type="button"
+                                    className="flex h-8 w-8 items-center justify-center rounded-lg border bg-white font-bold hover:bg-slate-50 transition"
+                                    onClick={() => setProducts((current) => ({
+                                      ...current,
+                                      [application.applicationId]: {
+                                        ...selection,
+                                        items: { ...selection.items, [product.id]: Math.max(0, quantity - 1) },
+                                      },
+                                    }))}
+                                  >
+                                    -
+                                  </button>
+                                  <span className="w-7 text-center font-bold text-navy text-sm">{quantity}</span>
+                                  <button
+                                    type="button"
+                                    className="flex h-8 w-8 items-center justify-center rounded-lg border bg-white font-bold hover:bg-slate-50 transition"
+                                    onClick={() => setProducts((current) => ({
+                                      ...current,
+                                      [application.applicationId]: {
+                                        ...selection,
+                                        items: { ...selection.items, [product.id]: quantity + 1 },
+                                      },
+                                    }))}
+                                  >
+                                    +
+                                  </button>
+                                </div>
                               </div>
                             </div>
                           )
