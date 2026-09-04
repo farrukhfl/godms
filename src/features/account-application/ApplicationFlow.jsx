@@ -1894,15 +1894,6 @@ export default function ApplicationFlow({ onComplete }) {
                       )}
                     </div>
 
-                    {/* Explanation Box below Credit Card Plans matching Image 1 */}
-                    {application.solution === 'credit-card' && (
-                      <div className="mt-6 rounded-xl border border-primary/20 bg-slate-50 p-4 text-xs leading-relaxed text-slate-600">
-                        <p>
-                          <strong className="text-navy">*DMS Monthly Fee</strong> refers to the Dolphin Merchant Service Monthly Fee, which includes PCI compliance support and customer service.
-                        </p>
-                      </div>
-                    )}
-
                     {/* ATM Plan Conditional Flow */}
                     {application.solution === 'atm' && (normalizedCurrentPlan.includes('owner') || normalizedCurrentPlan.includes('placement')) && (
                       <div className="mt-8 rounded-2xl border border-primary/20 bg-slate-50/70 p-5 sm:p-6 space-y-5">
@@ -1997,6 +1988,13 @@ export default function ApplicationFlow({ onComplete }) {
                   </section>
                 )
               })}
+            </div>
+
+            {/* General Fee Explanation Disclosure for all plans */}
+            <div className="mt-6 rounded-2xl border border-primary/20 bg-slate-50/80 p-4 sm:p-5 text-xs leading-relaxed text-slate-600">
+              <p>
+                <strong className="text-navy">*DMS Monthly Fee</strong> refers to the Dolphin Merchant Service Monthly Fee, which includes PCI compliance support, gateway connectivity, and customer service.
+              </p>
             </div>
           </>
         )}
