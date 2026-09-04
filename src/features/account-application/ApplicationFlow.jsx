@@ -1,5 +1,6 @@
 import {
   ArrowLeft,
+  ArrowLeftRight,
   ArrowRight,
   Banknote,
   Building2,
@@ -14,6 +15,7 @@ import {
   FileCheck2,
   FileText,
   Globe2,
+  Handshake,
   Info,
   Landmark,
   LoaderCircle,
@@ -24,6 +26,7 @@ import {
   Search,
   ShoppingBasket,
   ShoppingCart,
+  Tag,
   UserRound,
   WalletCards,
   Wind,
@@ -126,36 +129,76 @@ const merchantOwnedForms = {
   'ach-processing': 'merchantOwnedAchProcessing',
 }
 
-// Exact plan text overrides matching legacy form requirements
-const planOverrides = {
-  'surcharge': {
-    name: 'Surcharge',
-    description: '2.9% Applies to credit card transactions only. Debit: 1.75% + $0.15 per transaction DMS Monthly Fee*',
-  },
-  'cash discount': {
-    name: 'Cash Discount',
-    description: '3.9% Customers can save by paying with cash. DMS Monthly Fee*',
-  },
-  'cash-discount': {
-    name: 'Cash Discount',
-    description: '3.9% Customers can save by paying with cash. DMS Monthly Fee*',
-  },
-  'flat rate': {
-    name: 'Flat Rate',
-    description: '2.75% One simple rate for all transactions. DMS Monthly Fee*',
-  },
-  'interchange (ic plus)': {
-    name: 'Interchange (IC Plus)',
-    description: "0.25% + $0.07 per transaction Transparent pricing based on the card's interchange rate. DMS Monthly Fee*",
-  },
-  'ownership': {
-    name: 'Ownership',
-    description: 'Purchase the ATM and manage cash loading yourself or through an approved cash-loading service. Keep 90% of your ATM surcharge revenue.',
-  },
-  'placement': {
-    name: 'Placement',
-    description: 'We handle the ATM, cash loading, maintenance, and processing, while you earn a share of the surcharge revenue. Split ATM surcharge revenue 50/50 with Dolphin Merchant Services.',
-  },
+function getPlanDetails(plan) {
+  const planKey = (plan?.name || '').toLowerCase().trim()
+
+  if (planKey.includes('cash discount') || planKey === 'cash-discount') {
+    return {
+      title: 'Cash Discount',
+      rate: '3.9%',
+      desc: 'Customers can save by paying with cash.',
+      feeNote: 'DMS Monthly Fee*',
+      Icon: Banknote,
+    }
+  }
+
+  if (planKey.includes('surcharge')) {
+    return {
+      title: 'Surcharge',
+      rate: '2.9%',
+      desc: 'Applies to credit card transactions only. Debit: 1.75% + $0.15 per transaction',
+      feeNote: 'DMS Monthly Fee*',
+      Icon: CreditCard,
+    }
+  }
+
+  if (planKey.includes('interchange') || planKey.includes('ic plus')) {
+    return {
+      title: 'Interchange (IC Plus)',
+      rate: '0.25% + $0.07 per transaction',
+      desc: "Transparent pricing based on the card's interchange rate.",
+      feeNote: 'DMS Monthly Fee*',
+      Icon: ArrowLeftRight,
+    }
+  }
+
+  if (planKey.includes('flat rate') || planKey.includes('flat')) {
+    return {
+      title: 'Flat Rate',
+      rate: '2.75%',
+      desc: 'One simple rate for all transactions.',
+      feeNote: 'DMS Monthly Fee*',
+      Icon: Tag,
+    }
+  }
+
+  if (planKey.includes('owner')) {
+    return {
+      title: 'Ownership',
+      rate: 'Keep 90% Surcharge',
+      desc: 'Purchase the ATM and manage cash loading yourself or through an approved cash-loading service.',
+      feeNote: 'Keep 90% of your ATM surcharge revenue.',
+      Icon: Landmark,
+    }
+  }
+
+  if (planKey.includes('placement')) {
+    return {
+      title: 'Placement',
+      rate: '50/50 Revenue Split',
+      desc: 'We handle the ATM, cash loading, maintenance, and processing, while you earn a share of the surcharge revenue.',
+      feeNote: 'Split ATM surcharge revenue 50/50 with Dolphin Merchant Services.',
+      Icon: Handshake,
+    }
+  }
+
+  return {
+    title: plan?.name || 'Standard Plan',
+    rate: null,
+    desc: plan?.description || '',
+    feeNote: null,
+    Icon: CreditCard,
+  }
 }
 
 const initialValues = {
@@ -1804,28 +1847,43 @@ export default function ApplicationFlow({ onComplete }) {
                     <h3 className="mb-4 text-lg font-extrabold capitalize text-navy">
                       {getServiceLabel(application.solution)}
                     </h3>
-                    <div className="grid gap-4 sm:grid-cols-2">
+                    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
                       {available.map((plan) => {
                         const isSelected = currentPlan === plan.name
-                        const planKey = (plan.name || '').toLowerCase().trim()
-                        const override = planOverrides[planKey]
-                        const planTitle = override?.name || plan.name
-                        const planDesc = override?.description || plan.description
+                        const details = getPlanDetails(plan)
+                        const PlanIcon = details.Icon
 
                         return (
                           <button
                             type="button"
                             key={plan.id}
                             onClick={() => setPlans((current) => ({ ...current, [application.applicationId]: plan.name }))}
-                            className={`flex flex-col justify-between rounded-2xl border p-5 text-left transition ${isSelected ? 'border-primary bg-mist shadow-sm' : 'border-slate-200 hover:border-primary/50'}`}
+                            className={`group relative flex flex-col justify-between rounded-2xl border p-5 sm:p-6 text-center transition ${isSelected ? 'border-primary bg-mist shadow-md' : 'border-slate-200 bg-white hover:border-primary/50 hover:shadow-sm'}`}
                           >
-                            <div className="flex items-start justify-between gap-3">
-                              <strong className="text-navy text-base">{planTitle}</strong>
-                              <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full border ${isSelected ? 'border-primary bg-primary text-white' : 'border-slate-300'}`}>
-                                {isSelected && <Check size={14} />}
+                            <span className={`absolute right-3.5 top-3.5 flex h-5 w-5 items-center justify-center rounded-full border transition ${isSelected ? 'border-primary bg-primary text-white' : 'border-slate-300 bg-white'}`}>
+                              {isSelected && <Check size={12} />}
+                            </span>
+
+                            <div className="flex flex-col items-center">
+                              <span className={`flex h-12 w-12 items-center justify-center rounded-xl transition ${isSelected ? 'bg-primary text-white' : 'bg-mist text-primary group-hover:bg-primary group-hover:text-white'}`}>
+                                <PlanIcon size={24} />
                               </span>
+                              <strong className="mt-3.5 text-base font-extrabold text-navy">{details.title}</strong>
+                              {details.rate && (
+                                <p className="mt-1 text-base font-black text-primary">
+                                  {details.rate}
+                                </p>
+                              )}
+                              <p className="mt-2 text-xs leading-relaxed text-slate-600">
+                                {details.desc}
+                              </p>
                             </div>
-                            <p className="mt-2 text-sm leading-6 text-slate-600">{planDesc}</p>
+
+                            {details.feeNote && (
+                              <p className="mt-3 border-t border-slate-100 pt-2 text-[11px] font-semibold text-slate-400">
+                                {details.feeNote}
+                              </p>
+                            )}
                           </button>
                         )
                       })}
@@ -1835,6 +1893,15 @@ export default function ApplicationFlow({ onComplete }) {
                         </p>
                       )}
                     </div>
+
+                    {/* Explanation Box below Credit Card Plans matching Image 1 */}
+                    {application.solution === 'credit-card' && (
+                      <div className="mt-6 rounded-xl border border-primary/20 bg-slate-50 p-4 text-xs leading-relaxed text-slate-600">
+                        <p>
+                          <strong className="text-navy">*DMS Monthly Fee</strong> refers to the Dolphin Merchant Service Monthly Fee, which includes PCI compliance support and customer service.
+                        </p>
+                      </div>
+                    )}
 
                     {/* ATM Plan Conditional Flow */}
                     {application.solution === 'atm' && (normalizedCurrentPlan.includes('owner') || normalizedCurrentPlan.includes('placement')) && (
