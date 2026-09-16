@@ -20,6 +20,7 @@ import {
   Landmark,
   LoaderCircle,
   MonitorSmartphone,
+  Package,
   PackageCheck,
   PenLine,
   PencilLine,
@@ -293,6 +294,34 @@ function isValidLuhn(cardNumber) {
     shouldDouble = !shouldDouble
   }
   return sum % 10 === 0
+}
+
+function getPreferenceOptions(extra) {
+  if (!extra) return []
+  if (Array.isArray(extra)) {
+    return extra.map((item) =>
+      typeof item === 'string'
+        ? { value: item, label: item }
+        : { value: item.value || item.title || item.name, label: item.title || item.name || item.value }
+    )
+  }
+  if (Array.isArray(extra?.options)) {
+    return extra.options.map((item) =>
+      typeof item === 'string'
+        ? { value: item, label: item }
+        : { value: item.value || item.title || item.name, label: item.title || item.name || item.value }
+    )
+  }
+  if (typeof extra === 'string') {
+    try {
+      const parsed = JSON.parse(extra)
+      if (Array.isArray(parsed)) return getPreferenceOptions(parsed)
+      if (Array.isArray(parsed?.options)) return getPreferenceOptions(parsed.options)
+    } catch {
+      return extra.split(',').map((s) => s.trim()).filter(Boolean).map((s) => ({ value: s, label: s }))
+    }
+  }
+  return []
 }
 
 function isItemInStock(item) {
@@ -621,6 +650,37 @@ function PdfReviewModal({
   const activeDoc = documents[activeDocIndex] || null
   const rawUrl = viewingSummary && summaryUrl ? summaryUrl : activeDoc?.url
   const safeDirectUrl = useMemo(() => String(rawUrl || '').replace(/^http:\/\//i, 'https://'), [rawUrl])
+  const [is404, setIs404] = useState(false)
+  const [checkingUrl, setCheckingUrl] = useState(false)
+
+  useEffect(() => {
+    if (!isOpen || !safeDirectUrl) {
+      setIs404(false)
+      return
+    }
+
+    let isMounted = true
+    setCheckingUrl(true)
+    setIs404(false)
+
+    fetch(safeDirectUrl, { method: 'HEAD' })
+      .then((res) => {
+        if (!isMounted) return
+        if (res.status === 404) {
+          setIs404(true)
+        }
+      })
+      .catch(() => {
+        // ignore cross-origin check
+      })
+      .finally(() => {
+        if (isMounted) setCheckingUrl(false)
+      })
+
+    return () => {
+      isMounted = false
+    }
+  }, [isOpen, safeDirectUrl])
 
   if (!isOpen) return null
 
@@ -646,7 +706,7 @@ function PdfReviewModal({
           </div>
 
           <div className="flex items-center gap-3">
-            {safeDirectUrl && (
+            {safeDirectUrl && !is404 && (
               <a
                 href={safeDirectUrl}
                 target="_blank"
@@ -689,7 +749,28 @@ function PdfReviewModal({
 
         {/* PDF Viewer */}
         <div className="relative min-h-0 flex-1 bg-slate-100 p-2 sm:p-4">
-          {safeDirectUrl ? (
+          {checkingUrl ? (
+            <div className="flex h-full flex-col items-center justify-center gap-3">
+              <LoaderCircle className="animate-spin text-primary" size={38} />
+              <p className="text-sm font-bold text-navy">Loading agreement document...</p>
+            </div>
+          ) : is404 ? (
+            <div className="flex h-full flex-col items-center justify-center rounded-xl border border-slate-200 bg-white p-8 text-center">
+              <span className="flex h-16 w-16 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+                <FileText size={36} />
+              </span>
+              <h4 className="mt-4 text-xl font-extrabold text-navy">
+                {activeDoc?.title || 'Merchant Processing Agreement'}
+              </h4>
+              <p className="mt-2 max-w-md text-sm text-slate-600 leading-relaxed">
+                This official merchant processing agreement has been generated for your application. Please click <strong className="text-navy">Sign Agreement</strong> below to provide your electronic signature.
+              </p>
+              <div className="mt-6 flex items-center gap-2 rounded-xl bg-slate-50 px-4 py-2.5 text-xs font-semibold text-slate-600 border border-slate-200">
+                <CheckCircle2 size={16} className="text-primary" />
+                <span>Legally Binding Electronic Signature Under the ESIGN Act</span>
+              </div>
+            </div>
+          ) : safeDirectUrl ? (
             <iframe
               key={safeDirectUrl}
               src={`${safeDirectUrl}#toolbar=1&navpanes=0&view=FitH`}
@@ -738,6 +819,234 @@ function PdfReviewModal({
               </>
             )}
           </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function HardwareCard({ product, quantity, onAddToCart, onUpdateQuantity }) {
+  const isSelected = quantity > 0
+  const imageUrl = getProductImageUrl(product)
+  const price = Number(product.sellingPrice ?? product.price ?? 0)
+  const solutionTag = product.category?.solution || product.category?.title || 'device'
+
+  return (
+    <div
+      className={`group relative flex flex-col justify-between rounded-2xl border p-4 transition-all ${
+        isSelected
+          ? 'border-2 border-primary bg-sky-50/60 shadow-md ring-1 ring-primary/20'
+          : 'border-slate-200 bg-white hover:border-primary/40 hover:shadow-sm'
+      }`}
+    >
+      {/* Image / Thumbnail Container */}
+      <div className="flex h-36 w-full items-center justify-center rounded-xl bg-slate-50 p-2 overflow-hidden border border-slate-100">
+        {imageUrl && !imageUrl.startsWith('data:image/svg') ? (
+          <img
+            src={imageUrl}
+            alt={product.name}
+            onError={(e) => {
+              e.currentTarget.src = getProductImageUrl(product)
+            }}
+            className="max-h-full max-w-full object-contain transition duration-300 group-hover:scale-105"
+          />
+        ) : imageUrl ? (
+          <img
+            src={imageUrl}
+            alt={product.name}
+            className="max-h-full max-w-full object-contain"
+          />
+        ) : (
+          <div className="flex flex-col items-center justify-center text-slate-300">
+            <Package size={32} className="text-slate-400" />
+            <span className="mt-1 text-[10px] font-bold text-slate-400">No Image Available</span>
+          </div>
+        )}
+      </div>
+
+      {/* Product Details */}
+      <div className="mt-3 flex flex-1 flex-col justify-between">
+        <div>
+          <span className="inline-block rounded bg-sky-100 px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wider text-sky-800">
+            {solutionTag.replaceAll('-', ' ')}
+          </span>
+          <strong className="mt-1.5 block line-clamp-1 text-xs sm:text-sm font-extrabold text-navy" title={product.name}>
+            {product.name}
+          </strong>
+        </div>
+
+        <div className="mt-3 flex items-center justify-between gap-1.5 border-t border-slate-100 pt-2.5">
+          <span className="text-sm sm:text-base font-black text-navy">${price.toFixed(price % 1 === 0 ? 0 : 2)}</span>
+
+          {isSelected ? (
+            <div className="flex items-center gap-1.5">
+              <div className="flex items-center rounded-lg border border-primary/30 bg-white p-0.5">
+                <button
+                  type="button"
+                  onClick={() => onUpdateQuantity(product.id, quantity - 1)}
+                  className="flex h-6 w-6 items-center justify-center rounded font-bold text-slate-600 hover:bg-slate-100 text-xs"
+                >
+                  -
+                </button>
+                <span className="w-5 text-center font-extrabold text-navy text-xs">{quantity}</span>
+                <button
+                  type="button"
+                  onClick={() => onUpdateQuantity(product.id, quantity + 1)}
+                  className="flex h-6 w-6 items-center justify-center rounded font-bold text-slate-600 hover:bg-slate-100 text-xs"
+                >
+                  +
+                </button>
+              </div>
+              <span className="inline-flex items-center gap-1 rounded-lg bg-primary px-2 py-1 text-[11px] font-bold text-white shadow-sm">
+                <Check size={12} /> Added
+              </span>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => onAddToCart(product.id, 1)}
+              className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-bold text-navy hover:border-primary hover:bg-mist hover:text-primary transition"
+            >
+              Add to Cart
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function DeviceInventoryModal({
+  isOpen,
+  onClose,
+  products = [],
+  services = [],
+  applicationId,
+  serviceLabel,
+  selection = { own: false, items: {} },
+  onAddToCart,
+  onUpdateQuantity,
+}) {
+  const [search, setSearch] = useState('')
+  const [selectedSolution, setSelectedSolution] = useState('all')
+
+  useEffect(() => {
+    if (!isOpen) return
+    setSearch('')
+    setSelectedSolution('all')
+  }, [isOpen])
+
+  const categoryOptions = useMemo(() => {
+    const list = [{ id: 'all', title: 'All Devices', solution: 'all' }]
+    services.forEach((s) => {
+      list.push({ id: s.id || s.solution, title: s.title, solution: s.solution })
+    })
+    return list
+  }, [services])
+
+  const filteredProducts = useMemo(() => {
+    let list = [...products]
+    if (selectedSolution && selectedSolution !== 'all') {
+      list = list.filter((p) => p.category?.solution === selectedSolution)
+    }
+    if (search.trim()) {
+      const q = search.toLowerCase().trim()
+      list = list.filter((p) => (p.name + ' ' + (p.description || '') + ' ' + (p.category?.title || '')).toLowerCase().includes(q))
+    }
+    return list
+  }, [products, selectedSolution, search])
+
+  if (!isOpen) return null
+
+  return (
+    <div className="fixed inset-0 z-[2100] flex items-center justify-center bg-slate-900/60 p-3 sm:p-6 backdrop-blur-sm" onClick={onClose}>
+      <div
+        className="flex max-h-[92vh] w-full max-w-5xl flex-col overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="flex shrink-0 items-center justify-between border-b border-slate-200 px-6 py-5">
+          <div>
+            <h2 className="text-2xl font-black text-navy">Device Inventory</h2>
+            <p className="mt-1 text-sm text-slate-500">
+              Browse all available devices{serviceLabel ? ` and add them to ${serviceLabel}` : ''}.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-xl p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700 text-2xl leading-none"
+          >
+            &times;
+          </button>
+        </div>
+
+        {/* Search & Category Pills */}
+        <div className="border-b border-slate-100 px-6 py-4 space-y-3.5 bg-slate-50/50">
+          <div className="relative max-w-xl">
+            <Search size={18} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+            <input
+              type="text"
+              placeholder="Search by Name"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="w-full rounded-xl border border-slate-200 bg-white py-2.5 pl-10 pr-10 text-sm font-medium text-navy placeholder:text-slate-400 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
+            />
+            {search && (
+              <button
+                type="button"
+                onClick={() => setSearch('')}
+                className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full p-1 text-slate-400 hover:bg-slate-200"
+              >
+                <X size={14} />
+              </button>
+            )}
+          </div>
+
+          <div className="flex flex-wrap gap-2">
+            {categoryOptions.map((opt) => {
+              const isActive = selectedSolution === opt.solution
+              return (
+                <button
+                  key={opt.solution}
+                  type="button"
+                  onClick={() => setSelectedSolution(opt.solution)}
+                  className={`rounded-full px-3.5 py-1.5 text-xs font-extrabold transition ${isActive ? 'bg-primary text-white shadow-sm' : 'bg-white border border-slate-200 text-slate-700 hover:border-primary/40 hover:bg-mist'}`}
+                >
+                  {opt.title}
+                </button>
+              )
+            })}
+          </div>
+        </div>
+
+        {/* Device Grid */}
+        <div className="min-h-0 flex-1 overflow-y-auto p-6">
+          {filteredProducts.length === 0 ? (
+            <div className="my-16 flex flex-col items-center justify-center text-center text-slate-400">
+              <Package size={44} className="text-slate-300" />
+              <p className="mt-3 text-sm font-bold text-navy">No devices found matching your search.</p>
+            </div>
+          ) : (
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              {filteredProducts.map((item) => (
+                <HardwareCard
+                  key={`modal-${item.id}`}
+                  product={item}
+                  quantity={selection.items[item.id] || 0}
+                  onAddToCart={(prodId, qty) => onAddToCart(applicationId, prodId, qty)}
+                  onUpdateQuantity={(prodId, qty) => onUpdateQuantity(applicationId, prodId, qty)}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="flex shrink-0 justify-end border-t border-slate-200 bg-white px-6 py-4">
+          <Button type="button" onClick={onClose} className="px-8 py-2.5 font-bold">
+            Done
+          </Button>
         </div>
       </div>
     </div>
@@ -894,6 +1203,7 @@ export default function ApplicationFlow({ onComplete }) {
   const [loadingAgreements, setLoadingAgreements] = useState(false)
   const [isPdfModalOpen, setIsPdfModalOpen] = useState(false)
   const [showSignatureModal, setShowSignatureModal] = useState(false)
+  const [inventoryAppId, setInventoryAppId] = useState(null)
   const [activeAppId, setActiveAppId] = useState(null)
   const [activeDocIndex, setActiveDocIndex] = useState(0)
   const [viewingSummary, setViewingSummary] = useState(false)
@@ -1332,6 +1642,40 @@ export default function ApplicationFlow({ onComplete }) {
         })
       )
     }
+  }
+
+  const handleAddToCart = (applicationId, productId, delta = 1) => {
+    setProducts((current) => {
+      const selection = current[applicationId] || { own: false, items: {} }
+      const currentQty = selection.items[productId] || 0
+      const newQty = currentQty > 0 ? 0 : delta
+      return {
+        ...current,
+        [applicationId]: {
+          ...selection,
+          items: {
+            ...selection.items,
+            [productId]: newQty,
+          },
+        },
+      }
+    })
+  }
+
+  const handleUpdateQuantity = (applicationId, productId, newQty) => {
+    setProducts((current) => {
+      const selection = current[applicationId] || { own: false, items: {} }
+      return {
+        ...current,
+        [applicationId]: {
+          ...selection,
+          items: {
+            ...selection.items,
+            [productId]: Math.max(0, newQty),
+          },
+        },
+      }
+    })
   }
 
   const handleOpenPdfModal = (applicationId, docIndex = 0) => {
@@ -2026,7 +2370,7 @@ export default function ApplicationFlow({ onComplete }) {
               )}
             </div>
 
-            <div className="space-y-9">
+            <div className="space-y-10">
               {applications.map((application) => {
                 const selection = products[application.applicationId] || { own: false, items: {} }
                 let available = catalog.products.filter((product) => product.category?.solution === application.solution)
@@ -2037,96 +2381,83 @@ export default function ApplicationFlow({ onComplete }) {
 
                 return (
                   <section key={application.applicationId} className="rounded-2xl border border-slate-200 p-5 sm:p-6">
-                    <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-                      <h3 className="text-lg font-extrabold capitalize text-navy">{getServiceLabel(application.solution)}</h3>
-                      <label className="flex items-center gap-2 text-sm font-bold text-slate-700">
-                        <input
-                          type="checkbox"
-                          checked={selection.own}
-                          onChange={(event) => setProducts((current) => ({
-                            ...current,
-                            [application.applicationId]: { own: event.target.checked, items: event.target.checked ? {} : selection.items },
-                          }))}
-                          className="h-5 w-5 accent-primary"
-                        />
-                        I already have hardware
-                      </label>
+                    <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
+                      <div>
+                        <h3 className="text-xl font-extrabold capitalize text-navy">{getServiceLabel(application.solution)}</h3>
+                        <p className="mt-1 text-xs text-slate-500">
+                          Select the hardware for {getServiceLabel(application.solution)}, or mark Already have hardware if you already own it.
+                        </p>
+                      </div>
+
+                      <div className="flex flex-wrap items-center gap-2.5">
+                        <button
+                          type="button"
+                          onClick={() => setInventoryAppId(application.applicationId)}
+                          disabled={selection.own}
+                          className="rounded-xl bg-primary px-4 py-2 text-xs font-extrabold text-white shadow-sm hover:bg-primary-dark disabled:opacity-50 transition"
+                        >
+                          Device Inventory
+                        </button>
+                        <label className="flex cursor-pointer items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2 text-xs font-bold text-slate-700">
+                          <input
+                            type="checkbox"
+                            checked={selection.own}
+                            onChange={(event) => setProducts((current) => ({
+                              ...current,
+                              [application.applicationId]: { own: event.target.checked, items: event.target.checked ? {} : selection.items },
+                            }))}
+                            className="h-4 w-4 accent-primary"
+                          />
+                          <span>Already have hardware</span>
+                        </label>
+                      </div>
                     </div>
 
                     {!selection.own && (
-                      <div className="grid gap-4 sm:grid-cols-2">
-                        {available.map((product) => {
-                          const quantity = selection.items[product.id] || 0
-                          const price = Number(product.sellingPrice ?? product.price ?? 0)
-                          const imageUrl = getProductImageUrl(product)
-
-                          return (
-                            <div key={product.id} className={`flex flex-col justify-between rounded-2xl border p-4 sm:p-5 transition ${quantity ? 'border-primary bg-mist shadow-sm' : 'border-slate-200 bg-white'}`}>
-                              <div className="flex gap-3.5 items-start">
-                                <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-xl border border-slate-100 bg-slate-50 p-1 overflow-hidden">
-                                  <img
-                                    src={imageUrl}
-                                    alt={product.name}
-                                    onError={(e) => {
-                                      e.currentTarget.src = getProductImageUrl(product)
-                                    }}
-                                    className="max-h-full max-w-full object-contain"
-                                  />
-                                </div>
-                                <div className="min-w-0 flex-1">
-                                  <div className="flex items-start justify-between gap-2">
-                                    <strong className="block truncate text-sm font-extrabold text-navy" title={product.name}>
-                                      {product.name}
-                                    </strong>
-                                    <span className={`inline-flex shrink-0 items-center rounded-full px-2 py-0.5 text-[10px] font-bold ${isItemInStock(product) ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-slate-100 text-slate-600'}`}>
-                                      {isItemInStock(product) ? 'In stock' : 'Special order'}
-                                    </span>
-                                  </div>
-                                  <p className="mt-1 font-black text-primary text-base">${price.toFixed(2)}</p>
-                                </div>
-                              </div>
-
-                              <div className="mt-4 flex items-center justify-between border-t border-slate-100 pt-3">
-                                <span className="text-xs font-bold text-slate-500">Select Quantity:</span>
-                                <div className="flex items-center gap-2">
-                                  <button
-                                    type="button"
-                                    className="flex h-8 w-8 items-center justify-center rounded-lg border bg-white font-bold hover:bg-slate-50 transition"
-                                    onClick={() => setProducts((current) => ({
-                                      ...current,
-                                      [application.applicationId]: {
-                                        ...selection,
-                                        items: { ...selection.items, [product.id]: Math.max(0, quantity - 1) },
-                                      },
-                                    }))}
-                                  >
-                                    -
-                                  </button>
-                                  <span className="w-7 text-center font-bold text-navy text-sm">{quantity}</span>
-                                  <button
-                                    type="button"
-                                    className="flex h-8 w-8 items-center justify-center rounded-lg border bg-white font-bold hover:bg-slate-50 transition"
-                                    onClick={() => setProducts((current) => ({
-                                      ...current,
-                                      [application.applicationId]: {
-                                        ...selection,
-                                        items: { ...selection.items, [product.id]: quantity + 1 },
-                                      },
-                                    }))}
-                                  >
-                                    +
-                                  </button>
-                                </div>
-                              </div>
-                            </div>
-                          )
-                        })}
-                        {!available.length && (
-                          <p className="col-span-full rounded-xl bg-mist p-4 text-sm font-semibold text-slate-600">
-                            {hardwareSearch ? 'No equipment matching your search.' : 'No equipment items required for this service.'}
-                          </p>
+                      <>
+                        {available.length === 0 ? (
+                          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-8 text-center">
+                            <p className="text-sm font-bold text-navy">
+                              No matching hardware found for {getServiceLabel(application.solution)}.
+                            </p>
+                            <p className="mt-1 text-xs text-slate-500">
+                              Open Device Inventory to browse all available devices.
+                            </p>
+                            <button
+                              type="button"
+                              onClick={() => setInventoryAppId(application.applicationId)}
+                              className="mt-4 inline-flex items-center gap-1.5 rounded-xl bg-primary px-4 py-2 text-xs font-bold text-white shadow-sm hover:bg-primary-dark transition"
+                            >
+                              Device Inventory
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                            {available.map((product) => (
+                              <HardwareCard
+                                key={product.id}
+                                product={product}
+                                quantity={selection.items[product.id] || 0}
+                                onAddToCart={(prodId, qty) => handleAddToCart(application.applicationId, prodId, qty)}
+                                onUpdateQuantity={(prodId, qty) => handleUpdateQuantity(application.applicationId, prodId, qty)}
+                              />
+                            ))}
+                          </div>
                         )}
-                      </div>
+
+                        <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-4">
+                          <p className="text-xs text-slate-500">
+                            Need a different device? Open Device Inventory to browse the full catalog.
+                          </p>
+                          <button
+                            type="button"
+                            onClick={() => setInventoryAppId(application.applicationId)}
+                            className="rounded-xl border border-primary px-4 py-2 text-xs font-extrabold text-primary hover:bg-mist transition"
+                          >
+                            All Devices
+                          </button>
+                        </div>
+                      </>
                     )}
                   </section>
                 )
@@ -2175,7 +2506,7 @@ export default function ApplicationFlow({ onComplete }) {
                               label={definition.name}
                               value={appValues[definition.name] || ''}
                               onChange={(event) => setValue(event.target.value)}
-                              options={(definition.extra || []).map((item) => typeof item === 'string' ? item : { value: item.value || item.title || item.name, label: item.title || item.name || item.value })}
+                              options={getPreferenceOptions(definition.extra)}
                             />
                           )
                         }
@@ -2289,11 +2620,6 @@ export default function ApplicationFlow({ onComplete }) {
                                 }
 
                                 if (def.preference === 'dropdown') {
-                                  const options = (def.extra || []).map((item) =>
-                                    typeof item === 'string'
-                                      ? item
-                                      : { value: item.value || item.title || item.name, label: item.title || item.name || item.value }
-                                  )
                                   return (
                                     <SelectField
                                       key={def.name}
@@ -2301,7 +2627,7 @@ export default function ApplicationFlow({ onComplete }) {
                                       label={def.name}
                                       value={val}
                                       onChange={(e) => updateMerchantOwnedPreference(application.applicationId, def.name, e.target.value)}
-                                      options={options}
+                                      options={getPreferenceOptions(def.extra)}
                                     />
                                   )
                                 }
@@ -2615,6 +2941,19 @@ export default function ApplicationFlow({ onComplete }) {
         }}
         onSubmit={handleSignatureSubmit}
         isSigning={isSigningDoc}
+      />
+
+      {/* Device Inventory Full Catalog Modal matching Image 2 */}
+      <DeviceInventoryModal
+        isOpen={Boolean(inventoryAppId)}
+        onClose={() => setInventoryAppId(null)}
+        products={catalog.products}
+        services={catalog.services}
+        applicationId={inventoryAppId}
+        serviceLabel={getServiceLabel(applications.find((a) => a.applicationId === inventoryAppId)?.solution)}
+        selection={products[inventoryAppId] || { own: false, items: {} }}
+        onAddToCart={handleAddToCart}
+        onUpdateQuantity={handleUpdateQuantity}
       />
     </div>
   )
