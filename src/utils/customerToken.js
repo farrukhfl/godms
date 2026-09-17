@@ -46,27 +46,7 @@ export async function getCustomerAccessToken({ force = false } = {}) {
 
   pendingTokenRequest = (async () => {
     let response
-    
-    // 1. Try secure backend proxy first (keeps API key off frontend)
-    try {
-      const proxyRes = await fetch('/api/customer-token', {
-        headers: { Accept: 'application/json' },
-      })
-      if (proxyRes.ok) {
-        const proxyData = await proxyRes.json().catch(() => ({}))
-        if (proxyData?.data?.accessToken) {
-          const expiresInSeconds = Number(proxyData.data.expiresIn) || 3600
-          const expiryTimestamp = Date.now() + expiresInSeconds * 1000
-          localStorage.setItem(tokenKey, proxyData.data.accessToken)
-          localStorage.setItem(expiryKey, String(expiryTimestamp))
-          return proxyData.data.accessToken
-        }
-      }
-    } catch {
-      // Fallback to client fetch if proxy unavailable
-    }
 
-    // 2. Direct fetch if client key is configured
     const apiKey = import.meta.env.VITE_DRMS_API_KEY
     if (!apiKey) {
       return ''

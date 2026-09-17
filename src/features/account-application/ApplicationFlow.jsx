@@ -358,10 +358,10 @@ function normalizeAgreementDocs(result) {
     .filter((doc) => doc.url)
 }
 
-function Field({ id, label, required, error, tooltip, children, ...props }) {
+function Field({ id, label, required, error, tooltip, children, value, ...props }) {
   return (
     <FormField id={id} label={label} required={required} error={error} tooltip={tooltip}>
-      {children || <input id={id} className={`${formControlClasses} ${error ? 'border-rose-500' : ''}`} {...props} />}
+      {children || <input id={id} className={`${formControlClasses} ${error ? 'border-rose-500' : ''}`} value={value ?? ''} {...props} />}
     </FormField>
   )
 }
@@ -374,7 +374,7 @@ function MaskedField({ id, label, required, error, tooltip, value, onChange, pla
         <input
           id={id}
           type={show ? 'text' : 'password'}
-          value={value}
+          value={value ?? ''}
           onChange={onChange}
           placeholder={placeholder}
           maxLength={maxLength}
@@ -398,7 +398,7 @@ function MaskedField({ id, label, required, error, tooltip, value, onChange, pla
 function SelectField({ id, label, required, error, tooltip, value, onChange, options, placeholder = 'Select an option' }) {
   return (
     <FormField id={id} label={label} required={required} error={error} tooltip={tooltip}>
-      <select id={id} value={value} onChange={onChange} className={`${formControlClasses} ${error ? 'border-rose-500' : ''}`}>
+      <select id={id} value={value ?? ''} onChange={onChange} className={`${formControlClasses} ${error ? 'border-rose-500' : ''}`}>
         <option value="">{placeholder}</option>
         {options.map((option) => {
           const item = typeof option === 'string' ? { value: option, label: option } : option
@@ -875,37 +875,41 @@ function HardwareCard({ product, quantity, onAddToCart, onUpdateQuantity }) {
           </strong>
         </div>
 
-        <div className="mt-3 flex items-center justify-between gap-1.5 border-t border-slate-100 pt-2.5">
-          <span className="text-sm sm:text-base font-black text-navy">${price.toFixed(price % 1 === 0 ? 0 : 2)}</span>
+        <div className="mt-3.5 flex items-center justify-between gap-2 border-t border-slate-100 pt-3">
+          <span className="text-base font-black text-navy">${price.toFixed(price % 1 === 0 ? 0 : 2)}</span>
 
           {isSelected ? (
-            <div className="flex items-center gap-1.5">
-              <div className="flex items-center rounded-lg border border-primary/30 bg-white p-0.5">
+            <div className="flex flex-col items-end gap-1.5">
+              <div className="flex items-center rounded-md border border-slate-200 bg-white shadow-xs">
                 <button
                   type="button"
                   onClick={() => onUpdateQuantity(product.id, quantity - 1)}
-                  className="flex h-6 w-6 items-center justify-center rounded font-bold text-slate-600 hover:bg-slate-100 text-xs"
+                  className="flex h-6 w-6 items-center justify-center text-slate-600 hover:bg-slate-100 font-bold text-xs transition"
                 >
-                  -
+                  −
                 </button>
                 <span className="w-5 text-center font-extrabold text-navy text-xs">{quantity}</span>
                 <button
                   type="button"
                   onClick={() => onUpdateQuantity(product.id, quantity + 1)}
-                  className="flex h-6 w-6 items-center justify-center rounded font-bold text-slate-600 hover:bg-slate-100 text-xs"
+                  className="flex h-6 w-6 items-center justify-center text-slate-600 hover:bg-slate-100 font-bold text-xs transition"
                 >
                   +
                 </button>
               </div>
-              <span className="inline-flex items-center gap-1 rounded-lg bg-primary px-2 py-1 text-[11px] font-bold text-white shadow-sm">
+              <button
+                type="button"
+                onClick={() => onAddToCart(product.id, 0)}
+                className="inline-flex items-center gap-1 rounded-md bg-primary px-2.5 py-1 text-[11px] font-bold text-white shadow-sm hover:bg-primary-dark transition"
+              >
                 <Check size={12} /> Added
-              </span>
+              </button>
             </div>
           ) : (
             <button
               type="button"
               onClick={() => onAddToCart(product.id, 1)}
-              className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-bold text-navy hover:border-primary hover:bg-mist hover:text-primary transition"
+              className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-bold text-navy hover:border-primary hover:bg-mist hover:text-primary transition shadow-2xs"
             >
               Add to Cart
             </button>
@@ -1053,7 +1057,7 @@ function DeviceInventoryModal({
   )
 }
 
-function validate(step, values, selectedSolutions, plans, products, shipments, checkedByApp, applications = [], isRobotVerified = false) {
+function validate(step, values, selectedSolutions, plans, products, shipments, checkedByApp, applications = [], isRobotVerified = false, catalogProducts = []) {
   const errors = {}
   const required = (key, message) => { if (!String(values[key] ?? '').trim()) errors[key] = message }
 
@@ -1140,11 +1144,13 @@ function validate(step, values, selectedSolutions, plans, products, shipments, c
           }
         }
 
-        const hasInStock = products[id] && !products[id].own && Object.entries(products[id].items || {}).some(([, qty]) => {
+        const selection = products[id] || { own: false, items: {} }
+        const hasInStock = !selection.own && Object.entries(selection.items || {}).some(([itemId, qty]) => {
           if (!qty || qty <= 0) return false
-          return true
+          const prod = (catalogProducts || []).find((p) => String(p.id) === String(itemId))
+          return isItemInStock(prod)
         })
-        const effectivePaymentType = (!hasInStock && form.paymentType === 'Pay Now') ? 'Pay Later' : form.paymentType
+        const effectivePaymentType = (!hasInStock && form.paymentType === 'Pay Now') ? 'Pay Later' : (form.paymentType || 'Pay Later')
 
         if (effectivePaymentType === 'Pay Now' && hasInStock) {
           const cleanCard = digits(form.cardNumber, 16)
@@ -1273,15 +1279,28 @@ export default function ApplicationFlow({ onComplete }) {
       applications.forEach((application) => {
         const existing = next[application.applicationId] || {}
         const ownerFull = `${values.ownerFirstName || ''} ${values.ownerLastName || ''}`.trim()
+        const selection = products[application.applicationId] || { own: false, items: {} }
+        const hasInStock = !selection.own && Object.entries(selection.items || {}).some(([itemId, qty]) => {
+          if (!qty || qty <= 0) return false
+          const prod = (catalog.products || []).find((p) => String(p.id) === String(itemId))
+          return isItemInStock(prod)
+        })
+
+        const defaultPayment = hasInStock ? 'Pay Now' : 'Pay Later'
+        const currentPayment = existing.paymentType
+          ? (!hasInStock && existing.paymentType === 'Pay Now' ? 'Pay Later' : existing.paymentType)
+          : defaultPayment
+
         next[application.applicationId] = {
-          type: existing.type || 'Shipping',
-          paymentType: existing.paymentType || 'Pay Now',
+          type: existing.type || (selection.own ? 'MerchantOwned' : 'Shipping'),
+          paymentType: currentPayment,
           recipientName: existing.recipientName || values.businessName || values.legalName || ownerFull || '',
           companyName: existing.companyName || values.businessName || values.legalName || '',
           recipientPhone: existing.recipientPhone || values.dbaPhoneNumber || values.contactNumber || values.ownerPhoneNumber || '',
           email: existing.email || values.email || values.ownerEmail || '',
           address: existing.address || values.dbaAddress || values.legalAddress || '',
           floorStreet: existing.floorStreet || '',
+          city: existing.city || values.businessCity || values.legalCity || '',
           zipCode: existing.zipCode || values.businessZipCode || values.legalZipCode || '',
           country: 'United States',
           state: existing.state || values.businessState || values.legalState || '',
@@ -1302,7 +1321,7 @@ export default function ApplicationFlow({ onComplete }) {
       })
       return next
     })
-  }, [applications, values, step])
+  }, [applications, values, products, catalog.products, step])
 
   // Fetch agreement documents for Step 8
   useEffect(() => {
@@ -1802,7 +1821,7 @@ export default function ApplicationFlow({ onComplete }) {
   }
 
   const next = async () => {
-    const nextErrors = validate(step, values, solutions, plans, products, shipments, checkedByApp, applications, isRobotVerified)
+    const nextErrors = validate(step, values, solutions, plans, products, shipments, checkedByApp, applications, isRobotVerified, catalog.products)
     setErrors(nextErrors)
     setError('')
 
