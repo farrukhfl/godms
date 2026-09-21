@@ -119,7 +119,7 @@ export default function AboutPage() {
       <section className="bg-white py-16 sm:py-20">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <Reveal direction="scale"><div className="offer-shine relative flex flex-col items-center justify-between gap-7 overflow-hidden rounded-[2rem] bg-primary px-7 py-12 text-center text-white shadow-2xl shadow-primary/20 sm:px-12 lg:flex-row lg:text-left">
-            <div><p className="text-sm font-bold uppercase tracking-[0.2em] text-accent">Build what is next</p><h2 className="mt-3 text-3xl font-extrabold sm:text-4xl">Let&apos;s redefine payments together</h2></div>
+            <div><p className="text-sm font-bold uppercase tracking-[0.2em] text-white">Build what is next</p><h2 className="mt-3 text-3xl font-extrabold sm:text-4xl">Let&apos;s redefine payments together</h2></div>
             <Button to="/contact" variant="light" className="shrink-0">Contact Us <ArrowRight aria-hidden="true" size={18} /></Button>
           </div></Reveal>
         </div>

@@ -14,6 +14,7 @@ import SectionHeading from '../components/ui/SectionHeading'
 import { industries, solutions } from '../data/navigation'
 import { siteConfig } from '../data/siteConfig'
 import { categoryContent } from '../data/categoryContent'
+import { defaultFaqs } from '../data/homeFaqs'
 
 const features = [
   { icon: WalletCards, title: '$0 upfront to switch', text: `Get ${siteConfig.company.posName} without a large upfront equipment cost. Start with the tools you need for one straightforward monthly price.` },
@@ -55,10 +56,25 @@ const steps = [
   { number: '03', title: 'Start processing within 24 hours', text: 'Qualified businesses can be approved, configured, and ready to accept payments in as little as one day.' },
 ]
 
+const homeFaqSchema = {
+  '@context': 'https://schema.org',
+  '@type': 'FAQPage',
+  mainEntity: defaultFaqs.map((item) => ({
+    '@type': 'Question',
+    name: item.question,
+    acceptedAnswer: { '@type': 'Answer', text: item.answer },
+  })),
+}
+
 export default function HomePage() {
   return (
     <>
-      <Seo title={siteConfig.company.fullName} description={`Switch to ${siteConfig.company.posName} for $0 upfront and $49.99 per month. Get fast approval, no long-term lock-in, dual pricing, and dedicated support.`} />
+      <Seo
+        title={siteConfig.company.fullName}
+        description={`Switch to ${siteConfig.company.posName} for $0 upfront and $49.99 per month. Get fast approval, no long-term lock-in, dual pricing, and dedicated support.`}
+        path="/"
+        structuredData={[homeFaqSchema]}
+      />
       <Hero />
       <LogoMarquee />
 

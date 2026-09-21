@@ -1,7 +1,7 @@
-import { ArrowRight, CheckCircle2, Store } from 'lucide-react'
+import { ArrowRight, CheckCircle2, LoaderCircle, Store } from 'lucide-react'
+import { lazy, Suspense } from 'react'
 import Seo from '../components/Seo'
 import FAQAccordion from '../components/sections/FAQAccordion'
-import ProductGrid from '../components/sections/ProductGrid'
 import Button from '../components/ui/Button'
 import Card from '../components/ui/Card'
 import PricingDisclosure from '../components/ui/PricingDisclosure'
@@ -9,12 +9,15 @@ import Reveal from '../components/ui/Reveal'
 import SectionHeading from '../components/ui/SectionHeading'
 import { siteConfig } from '../data/siteConfig'
 
+const ProductGrid = lazy(() => import('../components/sections/ProductGrid'))
+
 const fallbackBody = [
   `${siteConfig.company.fullName} provides dependable payment technology and hands-on guidance for businesses choosing new equipment. Our team helps identify compatible products based on your processing environment, checkout flow, and day-to-day needs.`,
   'Explore this category as a starting point, then speak with a specialist to confirm compatibility, availability, pricing, and the best configuration for your business.',
 ]
 
 const fallbackBenefits = ['Equipment selected for your payment environment', 'Compatibility guidance before purchase', 'Options for growing and established businesses', 'Support from payment technology specialists']
+const siteUrl = 'https://godms.com'
 
 export default function CategoryPageTemplate({ title, heroTitle, description, type, icon: Icon, body = fallbackBody, benefits = fallbackBenefits, metaDescription, categoryPath, heroImage, heroImageAlt, showPricingDisclosure = false, stats, featureSections, audience, faqs, faqTitle, faqDescription, showIndustryPosOffer = false }) {
   const hasIndustryContent = featureSections?.length > 0
@@ -23,10 +26,35 @@ export default function CategoryPageTemplate({ title, heroTitle, description, ty
   const isStoreCategory = type === 'POS store category' || String(categoryPath || '').startsWith('/store')
   const isAnimatedPage = isIndustryPage || isSolutionPage
   const IconComponent = Icon || Store
+  const resolvedPath = String(categoryPath || '').startsWith('/') ? categoryPath : '/store'
+
+  const breadcrumbSchema = {
+    '@context': 'https://schema.org',
+    '@type': 'BreadcrumbList',
+    itemListElement: [
+      { '@type': 'ListItem', position: 1, name: 'Home', item: siteUrl },
+      { '@type': 'ListItem', position: 2, name: title, item: `${siteUrl}${resolvedPath}` },
+    ],
+  }
+
+  const faqSchema = faqs?.length > 0 ? {
+    '@context': 'https://schema.org',
+    '@type': 'FAQPage',
+    mainEntity: faqs.map((item) => ({
+      '@type': 'Question',
+      name: item.question,
+      acceptedAnswer: { '@type': 'Answer', text: item.answer },
+    })),
+  } : null
 
   return (
     <>
-      <Seo title={title} description={metaDescription || description} />
+      <Seo
+        title={title}
+        description={metaDescription || description}
+        path={resolvedPath}
+        structuredData={[breadcrumbSchema, faqSchema]}
+      />
       <section className="relative overflow-hidden bg-navy py-20 text-white sm:py-28">
         <div className={`${isAnimatedPage ? 'hero-blob' : ''} absolute -right-24 -top-24 h-80 w-80 rounded-full border-[55px] border-primary/20`} />
         <div className="relative mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
@@ -98,7 +126,11 @@ export default function CategoryPageTemplate({ title, heroTitle, description, ty
               <Button to="/open-an-account" className="mt-8 w-full">Open an account <ArrowRight aria-hidden="true" size={18} /></Button>
             </aside>}
           </div>
-          {isStoreCategory && <ProductGrid categoryPath={categoryPath} categoryTitle={title} />}
+          {isStoreCategory && (
+            <Suspense fallback={<div className="flex min-h-[40vh] items-center justify-center"><LoaderCircle className="animate-spin text-primary" size={36} /></div>}>
+              <ProductGrid key={categoryPath} categoryPath={categoryPath} categoryTitle={title} />
+            </Suspense>
+          )}
         </div>
       </section>}
 
@@ -108,7 +140,7 @@ export default function CategoryPageTemplate({ title, heroTitle, description, ty
             <Reveal direction="scale">
             <div className="offer-shine relative overflow-hidden rounded-[2rem] bg-gradient-to-r from-primary to-primary-dark px-7 py-8 text-white shadow-2xl shadow-primary/20 sm:px-10 sm:py-10">
               <div className="relative z-10 flex flex-col items-start justify-between gap-7 md:flex-row md:items-center">
-                <div><p className="text-sm font-bold uppercase tracking-[0.22em] text-accent">Industry launch offer</p><h2 className="mt-3 text-2xl font-extrabold sm:text-4xl">Dolphin POS: $0 upfront and $49.99/month</h2><p className="mt-3 text-lg font-semibold text-white/85">Businesses processing $10K+ in monthly sales may qualify for a free POS system.</p></div>
+                <div><p className="text-sm font-bold uppercase tracking-[0.22em] text-white">Industry launch offer</p><h2 className="mt-3 text-2xl font-extrabold sm:text-4xl">Dolphin POS: $0 upfront and $49.99/month</h2><p className="mt-3 text-lg font-semibold text-white/85">Businesses processing $10K+ in monthly sales may qualify for a free POS system.</p></div>
                 <Button to="/open-an-account" variant="light" className="shrink-0 rounded-full px-7 py-4 text-base">Check eligibility <ArrowRight aria-hidden="true" size={18} /></Button>
               </div>
               <PricingDisclosure dark className="relative z-10 mt-5 max-w-3xl" />

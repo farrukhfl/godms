@@ -8,6 +8,8 @@ import FormField, { formControlClasses } from '../components/ui/FormField'
 import Reveal from '../components/ui/Reveal'
 import SectionHeading from '../components/ui/SectionHeading'
 import { postForm } from '../utils/api'
+import { formatPhoneInput } from '../utils/phoneFormat'
+import { sanitizeText } from '../utils/sanitize'
 
 const sources = ['Existing client', 'Online search', 'Social media', 'Online ad', 'Word of mouth', 'Other']
 const services = ['Payment Processing', 'Dolphin POS', 'Other POS Systems', 'Merchant Cash Advance', 'EBT/SNAP Processing', 'ACH Processing', 'ATM Placements', 'AirVac Placements', 'Web 360+']
@@ -36,13 +38,6 @@ const initialValues = {
   _hp_company_sec: '',
 }
 
-function phoneFormat(value) {
-  const number = String(value || '').replace(/\D/g, '').slice(0, 10)
-  if (number.length < 4) return number
-  if (number.length < 7) return `(${number.slice(0, 3)}) ${number.slice(3)}`
-  return `(${number.slice(0, 3)}) ${number.slice(3, 6)}-${number.slice(6)}`
-}
-
 function validate(values) {
   const errors = {}
   if (!values.firstName.trim()) errors.firstName = 'Please enter your first name.'
@@ -68,7 +63,7 @@ export default function ReferralPartnerPage() {
 
   function handleChange(event) {
     const { name, value, checked, type } = event.target
-    const updatedValue = name === 'phone' ? phoneFormat(value) : (type === 'checkbox' ? checked : value)
+    const updatedValue = name === 'phone' ? formatPhoneInput(value) : (type === 'checkbox' ? checked : value)
     setValues((current) => ({ ...current, [name]: updatedValue }))
     if (errors[name]) setErrors((current) => ({ ...current, [name]: '' }))
     if (submitError) setSubmitError('')
@@ -88,12 +83,12 @@ export default function ReferralPartnerPage() {
 
     try {
       await postForm('/referral', {
-        firstName: values.firstName.trim(),
-        lastName: values.lastName.trim(),
+        firstName: sanitizeText(values.firstName),
+        lastName: sanitizeText(values.lastName),
         phone: values.phone.trim(),
-        email: values.email.trim(),
-        companyName: values.companyName.trim(),
-        companyWebsite: values.companyWebsite.trim(),
+        email: sanitizeText(values.email),
+        companyName: sanitizeText(values.companyName),
+        companyWebsite: sanitizeText(values.companyWebsite),
         source: values.source,
         service: values.service,
         consent: values.consent,
@@ -124,12 +119,12 @@ export default function ReferralPartnerPage() {
         <div className="explore-symbol absolute -right-12 -top-24 text-[18rem] font-black leading-none text-white/5 sm:text-[28rem]">$</div>
         <div className="relative mx-auto grid max-w-7xl items-center gap-12 px-4 sm:px-6 lg:grid-cols-[1.25fr_0.75fr] lg:px-8">
           <div>
-            <p className="hero-animate-1 text-sm font-bold uppercase tracking-[0.2em] text-accent">DMS Referral Partner</p>
+            <p className="hero-animate-1 text-sm font-bold uppercase tracking-[0.2em] text-white">DMS Referral Partner</p>
             <h1 className="hero-animate-2 mt-5 max-w-4xl text-balance text-5xl font-extrabold tracking-tight sm:text-6xl">Refer businesses to DMS. Make money telling people about our products and services.</h1>
             <Button href="#referral-form" variant="light" className="hero-animate-4 mt-9 px-7 py-4 text-base">Become a Partner <ArrowRight aria-hidden="true" size={19} /></Button>
           </div>
           <div className="hero-dashboard rounded-[2rem] border border-white/20 bg-white/10 p-8 backdrop-blur-sm">
-            <p className="text-7xl font-black text-accent">$500</p>
+            <p className="text-7xl font-black text-white">$500</p>
             <p className="mt-4 text-xl font-extrabold">for every eligible referral that goes live</p>
             <p className="mt-3 leading-7 text-white/85">No monthly referral limit. Program qualification, activation, and payment terms apply.</p>
           </div>

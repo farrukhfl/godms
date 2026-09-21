@@ -6,7 +6,7 @@ import { siteConfig } from '../data/siteConfig'
 export default function PlaceholderPage({ title = '404 - Page Not Found', description = 'The page you are looking for does not exist or has been moved.' }) {
   return (
     <>
-      <Seo title={title} description={description} />
+      <Seo title={title} description={description} noindex />
       <section className="bg-gradient-to-br from-mist via-white to-slate-50 py-20 sm:py-28">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <div className="mx-auto max-w-3xl text-center">

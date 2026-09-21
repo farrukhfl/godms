@@ -8,6 +8,8 @@ import SectionHeading from '../components/ui/SectionHeading'
 import { solutions } from '../data/navigation'
 import { siteConfig } from '../data/siteConfig'
 import { postForm } from '../utils/api'
+import { formatPhoneInput } from '../utils/phoneFormat'
+import { sanitizeText } from '../utils/sanitize'
 
 const initialValues = {
   name: '',
@@ -18,13 +20,6 @@ const initialValues = {
   message: '',
   _hp_confirm: '',
   _hp_company_sec: '',
-}
-
-function phoneFormat(value) {
-  const number = String(value || '').replace(/\D/g, '').slice(0, 10)
-  if (number.length < 4) return number
-  if (number.length < 7) return `(${number.slice(0, 3)}) ${number.slice(3)}`
-  return `(${number.slice(0, 3)}) ${number.slice(3, 6)}-${number.slice(6)}`
 }
 
 function validate(values) {
@@ -50,7 +45,7 @@ export default function ContactPage() {
 
   function handleChange(event) {
     const { name, value } = event.target
-    const updatedValue = name === 'phone' ? phoneFormat(value) : value
+    const updatedValue = name === 'phone' ? formatPhoneInput(value) : value
     setValues((current) => ({ ...current, [name]: updatedValue }))
     if (errors[name]) setErrors((current) => ({ ...current, [name]: '' }))
     if (submitError) setSubmitError('')
@@ -70,11 +65,11 @@ export default function ContactPage() {
 
     try {
       await postForm('/contact-inquiry', {
-        name: values.name.trim(),
-        email: values.email.trim(),
+        name: sanitizeText(values.name),
+        email: sanitizeText(values.email),
         phone: values.phone.trim(),
-        businessName: values.businessName.trim(),
-        message: values.message.trim(),
+        businessName: sanitizeText(values.businessName),
+        message: sanitizeText(values.message),
         service: values.service,
         solution: values.service,
         _hp_confirm: values._hp_confirm || undefined,
@@ -221,7 +216,7 @@ export default function ContactPage() {
       <section className="bg-white py-16 sm:py-20">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <div className="flex flex-col items-start justify-between gap-7 rounded-[2rem] bg-primary px-7 py-12 text-white sm:px-12 lg:flex-row lg:items-center">
-            <div><p className="text-sm font-bold uppercase tracking-[0.2em] text-accent">Ready to get started?</p><h2 className="mt-3 text-3xl font-extrabold sm:text-4xl">Talk to a payments expert today</h2></div>
+            <div><p className="text-sm font-bold uppercase tracking-[0.2em] text-white">Ready to get started?</p><h2 className="mt-3 text-3xl font-extrabold sm:text-4xl">Talk to a payments expert today</h2></div>
             <Button to="/open-an-account" variant="light" className="shrink-0">Open an Account <ArrowRight aria-hidden="true" size={18} /></Button>
           </div>
         </div>

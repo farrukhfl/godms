@@ -4,6 +4,8 @@ import {
   Cable,
   Check,
   CheckCircle2,
+  ChevronLeft,
+  ChevronRight,
   CreditCard,
   Eye,
   Filter,
@@ -22,7 +24,7 @@ import {
   X,
   Zap,
 } from 'lucide-react'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { wcStoreProducts } from '../../data/storeProducts'
 import { fetchStoreProducts } from '../../features/account-application/api'
@@ -234,7 +236,7 @@ function ProductCard({ product, onQuickView }) {
         {/* Badges */}
         <div className="absolute left-3 top-3 z-10 flex flex-col gap-1">
           {product.id % 3 === 0 && (
-            <span className="rounded bg-amber-500 px-2 py-0.5 text-[11px] font-black uppercase tracking-wider text-white shadow-sm">
+            <span className="rounded bg-amber-500 px-2 py-0.5 text-[11px] font-black uppercase tracking-wider text-amber-950 shadow-sm">
               Best Seller
             </span>
           )}
@@ -267,7 +269,7 @@ function ProductCard({ product, onQuickView }) {
         <button
           type="button"
           onClick={() => onQuickView(product)}
-          className="absolute bottom-3 right-3 flex items-center gap-1 rounded-xl bg-white/90 px-2.5 py-1.5 text-xs font-bold text-navy shadow-md backdrop-blur transition hover:bg-primary hover:text-white"
+          className="absolute bottom-3 right-3 flex min-h-9 items-center gap-1 rounded-xl bg-white/90 px-2.5 py-2 text-xs font-bold text-navy shadow-md backdrop-blur transition hover:bg-primary hover:text-white"
         >
           <Eye size={14} /> Quick View
         </button>
@@ -297,7 +299,7 @@ function ProductCard({ product, onQuickView }) {
             ))}
           </div>
           <span className="font-bold text-slate-700">{rating}</span>
-          <span className="text-slate-400">({reviews})</span>
+          <span className="text-slate-500">({reviews})</span>
         </div>
 
         {/* Price Row */}
@@ -348,6 +350,26 @@ export default function ProductGrid({
   const [inStockOnly, setInStockOnly] = useState(false)
   const [sortBy, setSortBy] = useState('featured')
   const [activeModalProduct, setActiveModalProduct] = useState(null)
+  const categoryScrollRef = useRef(null)
+  const [canScrollLeft, setCanScrollLeft] = useState(false)
+  const [canScrollRight, setCanScrollRight] = useState(false)
+
+  const updateCategoryScrollState = () => {
+    const el = categoryScrollRef.current
+    if (!el) return
+    setCanScrollLeft(el.scrollLeft > 4)
+    setCanScrollRight(el.scrollLeft + el.clientWidth < el.scrollWidth - 4)
+  }
+
+  useEffect(() => {
+    updateCategoryScrollState()
+    window.addEventListener('resize', updateCategoryScrollState)
+    return () => window.removeEventListener('resize', updateCategoryScrollState)
+  }, [])
+
+  const scrollCategoryRow = (direction) => {
+    categoryScrollRef.current?.scrollBy({ left: direction * 220, behavior: 'smooth' })
+  }
 
   useEffect(() => {
     let isMounted = true
@@ -368,13 +390,6 @@ export default function ProductGrid({
       isMounted = false
     }
   }, [])
-
-  // Sync category when categoryPath prop changes
-  useEffect(() => {
-    if (categoryPath) {
-      setSelectedCategory(categoryPath)
-    }
-  }, [categoryPath])
 
   // Process & filter products
   const displayProducts = useMemo(() => {
@@ -443,23 +458,56 @@ export default function ProductGrid({
       </div>
 
       {/* Category Tabs Pill Navigation */}
-      <div className="mt-8 flex gap-2 overflow-x-auto pb-2 scrollbar-none">
-        {storeCategoryNav.map((cat) => {
-          const targetPath = cat.path || '/store'
-          const isActive = selectedCategory === cat.path || (cat.id === 'all' && (!selectedCategory || selectedCategory === 'all' || selectedCategory === '/store'))
-          const Icon = cat.icon
-          return (
-            <Link
-              key={cat.id}
-              to={targetPath}
-              preventScrollReset={true}
-              className={`flex shrink-0 items-center gap-2 rounded-xl border px-4 py-2.5 text-xs font-bold transition ${isActive ? 'border-primary bg-primary text-white shadow-sm' : 'border-slate-200 bg-white text-slate-700 hover:border-primary/50 hover:bg-slate-50'}`}
+      <div className="relative mt-8">
+        {canScrollLeft && (
+          <>
+            <div className="pointer-events-none absolute inset-y-0 left-0 z-10 w-10 bg-gradient-to-r from-white to-transparent" />
+            <button
+              type="button"
+              onClick={() => scrollCategoryRow(-1)}
+              aria-label="Scroll categories left"
+              className="absolute left-0 top-1/2 z-20 -translate-y-1/2 rounded-full border border-slate-200 bg-white p-2.5 text-slate-600 shadow-sm hover:border-primary/50 hover:text-primary"
             >
-              <Icon size={15} />
-              <span>{cat.label}</span>
-            </Link>
-          )
-        })}
+              <ChevronLeft size={16} />
+            </button>
+          </>
+        )}
+        {canScrollRight && (
+          <>
+            <div className="pointer-events-none absolute inset-y-0 right-0 z-10 w-10 bg-gradient-to-l from-white to-transparent" />
+            <button
+              type="button"
+              onClick={() => scrollCategoryRow(1)}
+              aria-label="Scroll categories right"
+              className="absolute right-0 top-1/2 z-20 -translate-y-1/2 rounded-full border border-slate-200 bg-white p-2.5 text-slate-600 shadow-sm hover:border-primary/50 hover:text-primary"
+            >
+              <ChevronRight size={16} />
+            </button>
+          </>
+        )}
+        <div
+          ref={categoryScrollRef}
+          onScroll={updateCategoryScrollState}
+          className="flex gap-2 overflow-x-auto pb-2 scrollbar-none"
+        >
+          {storeCategoryNav.map((cat) => {
+            const targetPath = cat.path || '/store'
+            const isActive = selectedCategory === cat.path || (cat.id === 'all' && (!selectedCategory || selectedCategory === 'all' || selectedCategory === '/store'))
+            const Icon = cat.icon
+            return (
+              <Link
+                key={cat.id}
+                to={targetPath}
+                preventScrollReset={true}
+                onClick={() => setTimeout(updateCategoryScrollState, 0)}
+                className={`flex shrink-0 items-center gap-2 rounded-xl border px-4 py-2.5 text-xs font-bold transition ${isActive ? 'border-primary bg-primary text-white shadow-sm' : 'border-slate-200 bg-white text-slate-700 hover:border-primary/50 hover:bg-slate-50'}`}
+              >
+                <Icon size={15} />
+                <span>{cat.label}</span>
+              </Link>
+            )
+          })}
+        </div>
       </div>
 
       {/* Search & Filter Controls Bar */}
@@ -501,10 +549,11 @@ export default function ProductGrid({
 
           {/* Sort Dropdown */}
           <div className="flex items-center gap-2">
-            <Filter size={15} className="text-slate-400" />
+            <Filter size={15} className="text-slate-400" aria-hidden="true" />
             <select
               value={sortBy}
               onChange={(e) => setSortBy(e.target.value)}
+              aria-label="Sort products by"
               className="rounded-xl border border-slate-200 bg-white py-2 pl-3 pr-8 text-xs font-bold text-slate-700 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
             >
               <option value="featured">Sort: Featured</option>

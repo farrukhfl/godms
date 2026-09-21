@@ -22,6 +22,7 @@ import FormField, { formControlClasses } from '../components/ui/FormField'
 import Reveal from '../components/ui/Reveal'
 import SectionHeading from '../components/ui/SectionHeading'
 import { submitAgentRequest, unwrapData } from '../features/account-application/api'
+import { formatPhoneInput } from '../utils/phoneFormat'
 
 const partnerReasons = [
   { icon: WalletCards, title: 'Recurring Revenue', text: 'Earn commissions when referred merchants activate and continue processing under program terms.' },
@@ -89,13 +90,6 @@ const initialValues = {
   consent: false,
 }
 
-function phoneFormat(value) {
-  const number = String(value || '').replace(/\D/g, '').slice(0, 10)
-  if (number.length < 4) return number
-  if (number.length < 7) return `(${number.slice(0, 3)}) ${number.slice(3)}`
-  return `(${number.slice(0, 3)}) ${number.slice(3, 6)}-${number.slice(6)}`
-}
-
 function validate(values) {
   const errors = {}
   if (!values.firstName.trim()) errors.firstName = 'Please enter your first name.'
@@ -122,7 +116,7 @@ export default function PartnerProgramPage() {
 
   function handleChange(event) {
     const { name, value, checked, type } = event.target
-    const updatedValue = name === 'phone' ? phoneFormat(value) : (type === 'checkbox' ? checked : value)
+    const updatedValue = name === 'phone' ? formatPhoneInput(value) : (type === 'checkbox' ? checked : value)
     setValues((current) => ({ ...current, [name]: updatedValue }))
     if (errors[name]) setErrors((current) => ({ ...current, [name]: '' }))
     setApiError('')
@@ -209,7 +203,7 @@ export default function PartnerProgramPage() {
       <section className="bg-primary py-20 text-white sm:py-24">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <Reveal><SectionHeading eyebrow="How It Works" title="From application to commission in four stages." light /></Reveal>
-          <div className="mt-14 grid gap-8 sm:grid-cols-2 lg:grid-cols-4">{process.map(([title, text], index) => <Reveal key={title} delay={index * 110}><div className="border-t border-white/30 pt-6 transition duration-300 hover:-translate-y-2"><span className="font-black text-accent">0{index + 1}</span><h3 className="mt-4 text-2xl font-extrabold">{title}</h3><p className="mt-3 leading-7 text-white/85">{text}</p></div></Reveal>)}</div>
+          <div className="mt-14 grid gap-8 sm:grid-cols-2 lg:grid-cols-4">{process.map(([title, text], index) => <Reveal key={title} delay={index * 110}><div className="border-t border-white/30 pt-6 transition duration-300 hover:-translate-y-2"><span className="font-black text-white">0{index + 1}</span><h3 className="mt-4 text-2xl font-extrabold">{title}</h3><p className="mt-3 leading-7 text-white/85">{text}</p></div></Reveal>)}</div>
         </div>
       </section>
 

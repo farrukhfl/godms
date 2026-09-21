@@ -12,9 +12,9 @@ export default function CTASection() {
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <div className="grid items-end gap-10 lg:grid-cols-[1.3fr_0.7fr]">
           <Reveal direction="left" className="max-w-4xl">
-            <p className="mb-5 text-sm font-bold uppercase tracking-[0.24em] text-accent">Your next move starts here</p>
+            <p className="mb-5 text-sm font-bold uppercase tracking-[0.24em] text-white">Your next move starts here</p>
             <h2 className="text-balance text-4xl font-extrabold leading-[1.02] tracking-[-0.045em] sm:text-5xl lg:text-6xl">Ready for payments that work as hard as you do?</h2>
-            <p className="mt-7 max-w-2xl text-lg leading-8 text-white/80">Tell us how your business operates. We&apos;ll help you build a simpler, smarter way to get paid.</p>
+            <p className="mt-7 max-w-2xl text-lg leading-8 text-white">Tell us how your business operates. We&apos;ll help you build a simpler, smarter way to get paid.</p>
           </Reveal>
           <Reveal direction="right" delay={180} className="flex flex-col gap-3 lg:items-stretch">
             <Button to="/open-an-account" variant="light" className="rounded-full px-8 py-4 text-base shadow-2xl hover:-translate-y-1">Open an account <ArrowRight aria-hidden="true" size={19} /></Button>

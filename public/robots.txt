@@ -1,4 +1,5 @@
 User-agent: *
 Allow: /
+Disallow: /sign-in
 
 Sitemap: https://godms.com/sitemap.xml

@@ -8,6 +8,8 @@ import Reveal from '../components/ui/Reveal'
 import SectionHeading from '../components/ui/SectionHeading'
 import { siteConfig } from '../data/siteConfig'
 import { postForm } from '../utils/api'
+import { formatPhoneInput } from '../utils/phoneFormat'
+import { sanitizeText } from '../utils/sanitize'
 
 const work = [
   ['Credit & Debit Card Processing', 'Build dependable acceptance experiences across in-person and digital channels.'],
@@ -28,13 +30,6 @@ const initialValues = {
   message: '',
   _hp_confirm: '',
   _hp_company_sec: '',
-}
-
-function phoneFormat(value) {
-  const number = String(value || '').replace(/\D/g, '').slice(0, 10)
-  if (number.length < 4) return number
-  if (number.length < 7) return `(${number.slice(0, 3)}) ${number.slice(3)}`
-  return `(${number.slice(0, 3)}) ${number.slice(3, 6)}-${number.slice(6)}`
 }
 
 function validate(values) {
@@ -60,7 +55,7 @@ export default function CareersPage() {
 
   function handleChange(event) {
     const { name, value, files } = event.target
-    const updatedValue = name === 'phone' ? phoneFormat(value) : (files ? files[0] || null : value)
+    const updatedValue = name === 'phone' ? formatPhoneInput(value) : (files ? files[0] || null : value)
     setValues((current) => ({ ...current, [name]: updatedValue }))
     if (errors[name]) setErrors((current) => ({ ...current, [name]: '' }))
     if (submitError) setSubmitError('')
@@ -80,11 +75,11 @@ export default function CareersPage() {
 
     try {
       await postForm('/careers', {
-        name: values.name.trim(),
-        email: values.email.trim(),
+        name: sanitizeText(values.name),
+        email: sanitizeText(values.email),
         phone: values.phone.trim(),
-        message: values.message.trim(),
-        resumeFileName: values.resume?.name || 'resume.pdf',
+        message: sanitizeText(values.message),
+        resumeFileName: sanitizeText(values.resume?.name) || 'resume.pdf',
         _hp_confirm: values._hp_confirm || undefined,
         _hp_company_sec: values._hp_company_sec || undefined,
         _submission_started_at: startedAt,
@@ -151,13 +146,13 @@ export default function CareersPage() {
 
       <section className="bg-primary py-16 text-white sm:py-20">
         <Reveal direction="scale" className="mx-auto flex max-w-7xl flex-col items-start justify-between gap-8 px-4 sm:px-6 lg:flex-row lg:items-center lg:px-8">
-          <div className="max-w-3xl"><p className="text-sm font-bold uppercase tracking-[0.2em] text-accent">Built For Business</p><h2 className="mt-3 text-balance text-3xl font-extrabold sm:text-5xl">Make enterprise-grade fintech accessible to small businesses everywhere.</h2></div>
+          <div className="max-w-3xl"><p className="text-sm font-bold uppercase tracking-[0.2em] text-white">Built For Business</p><h2 className="mt-3 text-balance text-3xl font-extrabold sm:text-5xl">Make enterprise-grade fintech accessible to small businesses everywhere.</h2></div>
           <Button href="#openings" variant="light" className="shrink-0">Lead the Change <ArrowRight aria-hidden="true" size={18} /></Button>
         </Reveal>
       </section>
 
       <section className="border-b border-slate-200 bg-white py-10">
-        <div className="mx-auto flex max-w-7xl snap-x gap-4 overflow-x-auto px-4 sm:px-6 lg:px-8">
+        <div tabIndex="0" role="region" aria-label="Employee benefits, scroll for more" className="mx-auto flex max-w-7xl snap-x gap-4 overflow-x-auto px-4 sm:px-6 lg:px-8 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40">
           {benefits.map((benefit, index) => <Reveal key={benefit} delay={(index % 4) * 70} className="min-w-52"><div className="group h-full snap-start rounded-xl bg-mist px-5 py-4 font-bold text-navy transition hover:-translate-y-1 hover:bg-primary hover:text-white"><CheckCircle2 aria-hidden="true" className="mb-3 text-primary transition group-hover:text-white" size={20} />{benefit}</div></Reveal>)}
         </div>
       </section>

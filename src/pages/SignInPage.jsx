@@ -1,13 +1,13 @@
 import { Eye, EyeOff, LoaderCircle, LockKeyhole, UserRound } from 'lucide-react'
 import { useState } from 'react'
-import { Navigate, useLocation, useNavigate } from 'react-router-dom'
+import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom'
 import Seo from '../components/Seo'
 import Button from '../components/ui/Button'
 import FormField, { formControlClasses } from '../components/ui/FormField'
 import { siteConfig } from '../data/siteConfig'
 import { getAccessToken, saveSession } from '../utils/auth'
 
-const apiBaseUrl = (import.meta.env.VITE_DRMS_API_BASE_URL || 'https://dev-derps.gotmsolutions.com/api').replace(/\/$/, '')
+const apiBaseUrl = (import.meta.env.VITE_DRMS_API_BASE_URL || 'https://pos.gotmsolutions.com/api').replace(/\/$/, '')
 
 export default function SignInPage() {
   const navigate = useNavigate()
@@ -67,6 +67,7 @@ export default function SignInPage() {
               </div>
               <Button type="submit" disabled={loading} className="mt-7 w-full">{loading ? <><LoaderCircle className="animate-spin" size={18} /> Signing In...</> : 'Sign In'}</Button>
             </form>
+            <p className="mt-6 text-center text-sm text-slate-600">New to Dolphin? <Link to="/open-an-account" className="font-bold text-primary hover:text-primary-dark">Open an account</Link></p>
           </div>
         </div>
       </section>

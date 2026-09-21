@@ -17,9 +17,14 @@ import { Link, useParams } from 'react-router-dom'
 import Seo from '../components/Seo'
 import Button from '../components/ui/Button'
 import FormField, { formControlClasses } from '../components/ui/FormField'
+import { siteConfig } from '../data/siteConfig'
 import { wcStoreProducts } from '../data/storeProducts'
 import { fetchStoreProducts, placeOrder, unwrapData } from '../features/account-application/api'
 import { getAllProductImages, getProductImageUrl } from '../utils/productImages'
+import { formatPhoneInput } from '../utils/phoneFormat'
+import { sanitizeText } from '../utils/sanitize'
+
+const siteUrl = 'https://godms.com'
 
 const states = [
   'AL', 'AK', 'AZ', 'AR', 'CA', 'CO', 'CT', 'DE', 'FL', 'GA',
@@ -46,12 +51,6 @@ function digits(value, max = 30) {
   return String(value || '').replace(/\D/g, '').slice(0, max)
 }
 
-function phoneFormat(value) {
-  const number = digits(value, 10)
-  if (number.length < 4) return number
-  if (number.length < 7) return `(${number.slice(0, 3)}) ${number.slice(3)}`
-  return `(${number.slice(0, 3)}) ${number.slice(3, 6)}-${number.slice(6)}`
-}
 
 function formatCardNumber(value) {
   return String(value || '')
@@ -243,15 +242,15 @@ function CheckoutModal({ product, quantity, isOpen, onClose }) {
           },
         ],
         customer: {
-          firstName: customer.firstName.trim(),
-          lastName: customer.lastName.trim(),
-          email: customer.email.trim(),
+          firstName: sanitizeText(customer.firstName),
+          lastName: sanitizeText(customer.lastName),
+          email: sanitizeText(customer.email),
           phone: digits(customer.phone, 15),
           country: 'US',
-          street: customer.street.trim(),
-          city: customer.city.trim(),
-          state: customer.state.trim(),
-          zip: customer.zip.trim(),
+          street: sanitizeText(customer.street),
+          city: sanitizeText(customer.city),
+          state: sanitizeText(customer.state),
+          zip: sanitizeText(customer.zip),
         },
         shipToDifferentAddress: Boolean(shipToDifferentAddress),
         tax: Number(tax),
@@ -266,12 +265,12 @@ function CheckoutModal({ product, quantity, isOpen, onClose }) {
 
       if (shipToDifferentAddress) {
         payload.shipping = {
-          firstName: shipping.firstName.trim(),
-          lastName: shipping.lastName.trim(),
-          street: shipping.street.trim(),
-          city: shipping.city.trim(),
-          state: shipping.state.trim(),
-          zip: shipping.zip.trim(),
+          firstName: sanitizeText(shipping.firstName),
+          lastName: sanitizeText(shipping.lastName),
+          street: sanitizeText(shipping.street),
+          city: sanitizeText(shipping.city),
+          state: sanitizeText(shipping.state),
+          zip: sanitizeText(shipping.zip),
           country: 'US',
         }
       }
@@ -403,7 +402,7 @@ function CheckoutModal({ product, quantity, isOpen, onClose }) {
                             inputMode="numeric"
                             autoComplete="tel"
                             value={customer.phone}
-                            onChange={(e) => handleCustomerChange('phone', phoneFormat(e.target.value))}
+                            onChange={(e) => handleCustomerChange('phone', formatPhoneInput(e.target.value))}
                             placeholder="(555) 000-0000"
                             className={`${formControlClasses} ${errors.phone ? 'border-rose-500' : ''}`}
                           />
@@ -724,7 +723,7 @@ export default function ProductDetailPage() {
   const initialMatched = wcStoreProducts.find((item) => String(item.id) === String(id) || String(item.slug) === String(id)) || null
   const [product, setProduct] = useState(initialMatched)
   const [allProducts, setAllProducts] = useState(wcStoreProducts)
-  const [loading, setLoading] = useState(!initialMatched)
+  const [loading, setLoading] = useState(false)
   const [quantity, setQuantity] = useState(1)
   const [activeImage, setActiveImage] = useState(() => {
     if (!initialMatched) return ''
@@ -792,6 +791,7 @@ export default function ProductDetailPage() {
   if (!product) {
     return (
       <div className="mx-auto max-w-3xl px-4 py-20 text-center">
+        <Seo title="Product Not Found" description="The hardware item you are looking for may be unavailable or moved." noindex />
         <Package size={56} className="mx-auto text-slate-300" />
         <h1 className="mt-4 text-3xl font-extrabold text-navy">Product Not Found</h1>
         <p className="mt-2 text-slate-600">The hardware item you are looking for may be unavailable or moved.</p>
@@ -803,11 +803,55 @@ export default function ProductDetailPage() {
     )
   }
 
+  const productUrl = `${siteUrl}/store/product/${product.id}`
+  const absoluteImages = images
+    .filter((src) => src?.startsWith('http') || src?.startsWith('/'))
+    .map((src) => (src.startsWith('http') ? src : `${siteUrl}${src}`))
+  const productSchema = {
+    '@context': 'https://schema.org',
+    '@type': 'Product',
+    name: product.name,
+    description: product.description || `${product.name} commercial point-of-sale hardware and payment terminal.`,
+    sku: product.sku || `DMS-${product.id}`,
+    image: absoluteImages.length > 0 ? absoluteImages : undefined,
+    category: product.category?.title || 'Point-of-Sale Hardware',
+    brand: { '@type': 'Brand', name: siteConfig.company.fullName },
+    aggregateRating: {
+      '@type': 'AggregateRating',
+      ratingValue: rating,
+      reviewCount: reviews,
+    },
+    offers: {
+      '@type': 'Offer',
+      url: productUrl,
+      priceCurrency: 'USD',
+      price: price.toFixed(2),
+      availability: inStock ? 'https://schema.org/InStock' : 'https://schema.org/BackOrder',
+      itemCondition: 'https://schema.org/NewCondition',
+      seller: { '@type': 'Organization', name: siteConfig.company.fullName },
+    },
+  }
+
+  const breadcrumbSchema = {
+    '@context': 'https://schema.org',
+    '@type': 'BreadcrumbList',
+    itemListElement: [
+      { '@type': 'ListItem', position: 1, name: 'Home', item: siteUrl },
+      { '@type': 'ListItem', position: 2, name: 'POS Store', item: `${siteUrl}/store` },
+      { '@type': 'ListItem', position: 3, name: product.name, item: productUrl },
+    ],
+  }
+
+  const ogImage = absoluteImages[0]
+
   return (
     <>
       <Seo
-        title={`${product.name} | POS Store`}
+        title={product.name}
         description={product.description || `Buy ${product.name} commercial point-of-sale hardware and payment terminal.`}
+        image={ogImage}
+        path={`/store/product/${product.id}`}
+        structuredData={[productSchema, breadcrumbSchema]}
       />
 
       {/* Breadcrumb Navigation */}
@@ -833,6 +877,8 @@ export default function ProductDetailPage() {
                 <img
                   src={activeImage || getProductImageUrl(product)}
                   alt={product.name}
+                  fetchPriority="high"
+                  decoding="async"
                   onError={(e) => {
                     e.currentTarget.src = getProductImageUrl(product)
                   }}
@@ -857,7 +903,7 @@ export default function ProductDetailPage() {
                       onClick={() => setActiveImage(imgUrl)}
                       className={`h-20 w-20 shrink-0 overflow-hidden rounded-xl border-2 bg-white p-2 transition ${activeImage === imgUrl ? 'border-primary shadow-md' : 'border-slate-200 hover:border-slate-300'}`}
                     >
-                      <img src={imgUrl} alt={`Thumbnail ${index + 1}`} className="h-full w-full object-contain" />
+                      <img src={imgUrl} alt={`${product.name} - view ${index + 1}`} loading="lazy" decoding="async" className="h-full w-full object-contain" />
                     </button>
                   ))}
                 </div>
@@ -1086,6 +1132,8 @@ export default function ProductDetailPage() {
                         <img
                           src={relImg || getProductImageUrl(rel)}
                           alt={rel.name}
+                          loading="lazy"
+                          decoding="async"
                           onError={(e) => {
                             e.currentTarget.src = getProductImageUrl(rel)
                           }}
