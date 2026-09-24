@@ -38,7 +38,9 @@ export const formNameForPath = (pathname) => {
 
 // The internal dashboard is not part of the public site and must not appear in
 // its own traffic figures.
-const UNTRACKED_PREFIXES = ['/insights']
+// '/insight' rather than '/insights', so mistyped attempts to reach the
+// dashboard ('/insight', '/insightz') are not recorded as site pages either.
+const UNTRACKED_PREFIXES = ['/insight']
 
 export function isTrackedPath(pathname) {
   const path = String(pathname || '')

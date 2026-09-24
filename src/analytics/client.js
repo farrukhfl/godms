@@ -104,16 +104,28 @@ export function trackPageView(properties = {}) {
   })
 }
 
+let identifiedAs = null
+
 /**
  * Attaches a lead identity so an abandoned application can be followed up.
  * Only allowlisted contact fields survive sanitizePerson.
+ *
+ * Safe to call repeatedly. Contact details arrive across several steps - the
+ * email on Business, the owner's name two steps later - so the first call
+ * identifies and later ones fill in fields that did not exist yet.
  */
 export function identifyLead(details = {}) {
   const person = sanitizePerson(details)
   if (!person.email) return
+  const id = person.email.toLowerCase()
 
   withClient((client) => {
-    client.identify(person.email.toLowerCase(), person)
+    if (identifiedAs === id) {
+      client.setPersonProperties(person)
+      return
+    }
+    identifiedAs = id
+    client.identify(id, person)
   })
 }
 
