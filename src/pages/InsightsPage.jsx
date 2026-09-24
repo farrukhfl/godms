@@ -1,16 +1,19 @@
 import { useState } from 'react'
-import { LoaderCircle, LockKeyhole, RefreshCw, TriangleAlert } from 'lucide-react'
+import { LockKeyhole, RefreshCw, TriangleAlert } from 'lucide-react'
 import Seo from '../components/Seo'
 import Button from '../components/ui/Button'
 import { clearPassword, getPassword, setPassword } from '../features/insights/api'
 import useInsights from '../features/insights/useInsights'
 import {
   BarList,
+  CRITICAL,
   DataTable,
   EmptyState,
   Panel,
   SERIES_1,
   SERIES_2,
+  SectionHeading,
+  Skeleton,
   StatTile,
   StepFunnel,
   TrendChart,
@@ -25,20 +28,12 @@ const RANGES = [
 const number = (value) => Number(value || 0).toLocaleString('en-US')
 const rate = (part, whole) => (Number(whole) > 0 ? `${Math.round((Number(part) / Number(whole)) * 100)}%` : '—')
 
-function Loading() {
-  return (
-    <div className="flex items-center justify-center py-10 text-slate-400">
-      <LoaderCircle className="animate-spin" size={22} />
-    </div>
-  )
-}
-
 /** Each panel reports its own failure, so one bad query cannot blank the page. */
-function PanelState({ query, children }) {
-  if (query.loading) return <Loading />
+function PanelState({ query, children, skeleton = 4 }) {
+  if (query.loading) return <Skeleton rows={skeleton} />
   if (query.error) {
     return (
-      <div className="flex items-start gap-2 rounded-xl bg-rose-50 p-3 text-sm text-rose-700">
+      <div className="flex items-start gap-2 rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm font-semibold text-rose-700">
         <TriangleAlert className="mt-0.5 shrink-0" size={16} />
         <span>{query.error}</span>
       </div>
@@ -132,107 +127,114 @@ function Dashboard({ onLock }) {
   const refreshAll = () => all.forEach((query) => query.refresh())
 
   const totals = overview.rows[0] || {}
+  const spark = (key) => trend.rows.map((row) => row[key])
 
   return (
-    <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-      <header className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <h1 className="text-3xl font-extrabold tracking-tight text-navy">Site insights</h1>
-          <p className="mt-1 text-sm text-slate-600">
-            Traffic, form completion, and merchant application drop-off. Read-only.
-          </p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          {RANGES.map((range) => (
+    <div className="pb-16">
+      <header className="border-b border-navy/10 bg-navy">
+        <div className="mx-auto flex max-w-7xl flex-wrap items-end justify-between gap-5 px-4 py-7 sm:px-6 lg:px-8">
+          <div>
+            <p className="text-[11px] font-extrabold uppercase tracking-[0.2em] text-accent">Dolphin Merchant Services</p>
+            <h1 className="mt-2 text-3xl font-extrabold tracking-tight text-white sm:text-4xl">Site insights</h1>
+            <p className="mt-2 max-w-2xl text-sm leading-6 text-white/70">
+              Traffic, form completion and merchant application drop-off. Read-only — this dashboard cannot change a
+              customer record.
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="flex rounded-xl bg-white/10 p-1 ring-1 ring-white/15">
+              {RANGES.map((range) => (
+                <button
+                  key={range.days}
+                  type="button"
+                  onClick={() => setDays(range.days)}
+                  className={`rounded-lg px-3 py-1.5 text-[13px] font-bold transition ${
+                    days === range.days ? 'bg-white text-navy shadow-sm' : 'text-white/70 hover:text-white'
+                  }`}
+                >
+                  {range.label}
+                </button>
+              ))}
+            </div>
             <button
-              key={range.days}
               type="button"
-              onClick={() => setDays(range.days)}
-              className={`rounded-lg px-3 py-2 text-sm font-bold transition ${
-                days === range.days ? 'bg-primary text-white' : 'bg-white text-slate-600 ring-1 ring-slate-200 hover:bg-slate-50'
-              }`}
+              onClick={refreshAll}
+              className="flex items-center gap-2 rounded-xl bg-white/10 px-3 py-2 text-[13px] font-bold text-white/80 ring-1 ring-white/15 transition hover:bg-white/15 hover:text-white"
             >
-              {range.label}
+              <RefreshCw size={14} /> Refresh
             </button>
-          ))}
-          <button
-            type="button"
-            onClick={refreshAll}
-            className="flex items-center gap-2 rounded-lg bg-white px-3 py-2 text-sm font-bold text-slate-600 ring-1 ring-slate-200 hover:bg-slate-50"
-          >
-            <RefreshCw size={15} /> Refresh
-          </button>
-          <button
-            type="button"
-            onClick={onLock}
-            className="rounded-lg px-3 py-2 text-sm font-bold text-slate-500 hover:text-navy"
-          >
-            Lock
-          </button>
+            <button
+              type="button"
+              onClick={onLock}
+              className="rounded-xl px-3 py-2 text-[13px] font-bold text-white/60 transition hover:text-white"
+            >
+              Lock
+            </button>
+          </div>
         </div>
       </header>
 
-      {overview.error ? (
-        <div className="mt-6 flex items-start gap-2 rounded-xl bg-rose-50 p-4 text-sm text-rose-700">
-          <TriangleAlert className="mt-0.5 shrink-0" size={16} />
-          <span>{overview.error}</span>
-        </div>
-      ) : null}
+      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+        {overview.error ? (
+          <div className="mt-6 flex items-start gap-2 rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm font-semibold text-rose-700">
+            <TriangleAlert className="mt-0.5 shrink-0" size={16} />
+            <span>{overview.error}</span>
+          </div>
+        ) : null}
 
-      <div className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatTile label="Page views" value={overview.loading ? '—' : number(totals.pageviews)} hint={`${number(totals.visitors)} visitors`} />
-        <StatTile label="Sessions" value={overview.loading ? '—' : number(totals.sessions)} />
-        <StatTile
-          label="Merchant applications started"
-          value={overview.loading ? '—' : number(totals.app_starts)}
-          hint={`${number(totals.app_submits)} submitted · ${rate(totals.app_submits, totals.app_starts)} completion`}
-        />
-        <StatTile
-          label="Merchant applications abandoned"
-          value={overview.loading ? '—' : number(totals.app_abandons)}
-          hint={`${rate(totals.app_abandons, totals.app_starts)} of those started`}
-          tone="warn"
-        />
-      </div>
-
-      <div className="mt-8">
-        <h2 className="text-base font-bold text-navy">Other website forms</h2>
-        <p className="mt-1 text-sm text-slate-500">
-          Contact, careers, referral, partner program, product order and sign-in. The merchant application is a
-          nine-step flow, not a single form, so it is counted in the tiles above rather than here.
-        </p>
-        <div className="mt-4 grid gap-4 sm:grid-cols-3">
-          <StatTile label="Forms started" value={overview.loading ? '—' : number(totals.form_starts)} />
-          <StatTile label="Forms submitted" value={overview.loading ? '—' : number(totals.form_submits)} hint={`${rate(totals.form_submits, totals.form_starts)} completion`} />
-          <StatTile label="Forms abandoned" value={overview.loading ? '—' : number(totals.form_abandons)} tone="warn" />
-        </div>
-      </div>
-
-      <div className="mt-6 grid gap-5">
-        <Panel title="Daily traffic and applications" subtitle={`Last ${days} days.`}>
-          <PanelState query={trend}>
-            <TrendChart
-              rows={trend.rows}
-              series={[
-                { key: 'visitors', label: 'Visitors', color: SERIES_1 },
-                { key: 'app_starts', label: 'Applications started', color: SERIES_2 },
-              ]}
+        <div className="pt-8">
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            <StatTile
+              label="Page views"
+              value={number(totals.pageviews)}
+              hint={`${number(totals.visitors)} visitors · ${number(totals.sessions)} sessions`}
+              loading={overview.loading}
+              spark={spark('pageviews')}
             />
-          </PanelState>
-        </Panel>
-      </div>
+            <StatTile
+              label="Applications started"
+              value={number(totals.app_starts)}
+              hint={`${number(totals.app_submits)} submitted`}
+              loading={overview.loading}
+              spark={spark('app_starts')}
+              sparkColor={SERIES_2}
+            />
+            <StatTile
+              label="Completion rate"
+              value={rate(totals.app_submits, totals.app_starts)}
+              hint="Applications started that were submitted"
+              tone="good"
+              loading={overview.loading}
+            />
+            <StatTile
+              label="Applications abandoned"
+              value={number(totals.app_abandons)}
+              hint={`${rate(totals.app_abandons, totals.app_starts)} of those started`}
+              tone="warn"
+              loading={overview.loading}
+            />
+          </div>
+        </div>
 
-      <div className="mt-5 grid gap-5 lg:grid-cols-2">
-        <Panel
-          title="Application funnel"
-          subtitle="People who reached each of the nine steps, and how many left at each one."
-        >
-          <PanelState query={funnel}>
-            <StepFunnel rows={funnel.rows} />
-          </PanelState>
-        </Panel>
+        <SectionHeading
+          title="Merchant application"
+          description="The nine-step flow at /open-an-account. This is where the money is won or lost."
+        />
 
-        <div className="grid gap-5 content-start">
+        <div className="grid gap-5 lg:grid-cols-5">
+          <div className="lg:col-span-3">
+            <Panel
+              accent
+              title="Application funnel"
+              subtitle="How many people reached each step, and how many left at each one."
+            >
+              <PanelState query={funnel} skeleton={9}>
+                <StepFunnel rows={funnel.rows} />
+              </PanelState>
+            </Panel>
+          </div>
+
+          <div className="grid content-start gap-5 lg:col-span-2">
           <Panel title="Where applications are abandoned" subtitle="By the furthest step reached before leaving.">
             <PanelState query={dropoff}>
               <BarList
@@ -242,6 +244,7 @@ function Dashboard({ onLock }) {
                 secondaryKey="avg_seconds"
                 secondaryLabel="sec avg"
                 emptyText="No abandonments recorded in this period."
+                color={CRITICAL}
               />
             </PanelState>
           </Panel>
@@ -295,6 +298,22 @@ function Dashboard({ onLock }) {
         </Panel>
       </div>
 
+      <SectionHeading
+        title="Other website forms"
+        description="Contact, careers, referral, partner program, product order and sign-in. The merchant application is a nine-step flow rather than a single form, so it is counted in the section above."
+      />
+
+      <div className="grid gap-4 sm:grid-cols-3">
+        <StatTile label="Forms started" value={number(totals.form_starts)} loading={overview.loading} />
+        <StatTile
+          label="Forms submitted"
+          value={number(totals.form_submits)}
+          hint={`${rate(totals.form_submits, totals.form_starts)} completion`}
+          loading={overview.loading}
+        />
+        <StatTile label="Forms abandoned" value={number(totals.form_abandons)} tone="warn" loading={overview.loading} />
+      </div>
+
       <div className="mt-5 grid gap-5 lg:grid-cols-2">
         <Panel title="Form completion" subtitle="Started versus submitted, per form. Excludes the merchant application.">
           <PanelState query={forms}>
@@ -322,6 +341,23 @@ function Dashboard({ onLock }) {
               labelKey="last_field"
               valueKey="abandons"
               emptyText="No form abandonments recorded."
+              color={CRITICAL}
+            />
+          </PanelState>
+        </Panel>
+      </div>
+
+      <SectionHeading title="Audience" description={`Where visitors came from over the last ${days} days.`} />
+
+      <div className="grid gap-5">
+        <Panel title="Daily traffic and applications" subtitle={`Last ${days} days.`}>
+          <PanelState query={trend}>
+            <TrendChart
+              rows={trend.rows}
+              series={[
+                { key: 'visitors', label: 'Visitors', color: SERIES_1 },
+                { key: 'app_starts', label: 'Applications started', color: SERIES_2 },
+              ]}
             />
           </PanelState>
         </Panel>
@@ -363,11 +399,12 @@ function Dashboard({ onLock }) {
         </Panel>
       </div>
 
-      <p className="mt-8 text-xs leading-5 text-slate-400">
-        This dashboard reads analytics only. It holds no merchant or banking credential and cannot create, change or
-        delete a customer record. Social security numbers, tax IDs, bank details and signatures are blocked before
-        collection and are never present in this data.
-      </p>
+        <p className="mt-10 border-t border-slate-200 pt-5 text-xs leading-5 text-slate-400">
+          This dashboard reads analytics only. It holds no merchant or banking credential and cannot create, change or
+          delete a customer record. Social security numbers, tax IDs, bank details and signatures are blocked before
+          collection and are never present in this data.
+        </p>
+      </div>
     </div>
   )
 }
