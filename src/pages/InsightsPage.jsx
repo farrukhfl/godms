@@ -262,7 +262,11 @@ function Dashboard({ onLock }) {
           <PanelState query={leads}>
             <DataTable
               rows={leads.rows}
-              emptyText="No identified abandonments in this period."
+              emptyText={
+                Number(totals.app_abandons) > 0
+                  ? `Nobody to follow up. There ${Number(totals.app_abandons) === 1 ? 'was 1 abandonment' : `were ${number(totals.app_abandons)} abandonments`} in this period, but each was either left before contact details were entered, or by someone who came back and submitted.`
+                  : 'No abandoned applications in this period.'
+              }
               columns={[
                 { key: 'name', label: 'Name', render: (row) => row.name || '—' },
                 { key: 'business', label: 'Business', render: (row) => row.business || '—' },

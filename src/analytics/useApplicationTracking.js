@@ -21,7 +21,7 @@ export default function useApplicationTracking({ step, values, errors, applicati
   const previousStep = useRef(null)
   const started = useRef(false)
   const abandonSent = useRef(false)
-  const identified = useRef(false)
+  const identified = useRef('')
   const lastErrorSignature = useRef('')
 
   // Mirror of the latest state, so the unload handler can report current
@@ -76,20 +76,30 @@ export default function useApplicationTracking({ step, values, errors, applicati
     })
   }, [errors, step])
 
-  // Attach contact details once they exist, so an abandoned application can be
-  // followed up. Only allowlisted fields survive sanitizePerson.
+  // Attach contact details so an abandoned application can be followed up.
+  //
+  // These arrive across several steps: the email on Business, the owner's name
+  // two steps later. Identifying only once would permanently miss whatever had
+  // not been typed yet, so this re-sends whenever the details actually change -
+  // compared by value, not by object identity, since `values` is replaced on
+  // every keystroke. Only allowlisted fields survive sanitizePerson.
   useEffect(() => {
-    if (identified.current || !values) return
+    if (!values) return
     const email = String(values.email || values.ownerEmail || '').trim()
     if (!email.includes('@')) return
 
-    identified.current = true
-    identifyLead({
+    const lead = {
       email,
       phone: values.contactNumber || values.dbaPhoneNumber || values.ownerPhoneNumber || '',
       businessName: values.businessName || values.legalName || '',
       name: [values.ownerFirstName, values.ownerLastName].filter(Boolean).join(' '),
-    })
+    }
+
+    const signature = JSON.stringify(lead)
+    if (signature === identified.current) return
+    identified.current = signature
+
+    identifyLead(lead)
   }, [values])
 
   // Abandonment. Terminal signals only: closing or navigating away from the
