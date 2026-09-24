@@ -1,5 +1,7 @@
 import { Check, CheckCircle2 } from 'lucide-react'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import { markApplicationSubmitted } from '../analytics/applicationState'
+import { track } from '../analytics/client'
 import Seo from '../components/Seo'
 import Button from '../components/ui/Button'
 import PricingDisclosure from '../components/ui/PricingDisclosure'
@@ -8,6 +10,12 @@ import ApplicationFlow from '../features/account-application/ApplicationFlow'
 
 export default function OpenAccountPage() {
   const [completedApplications, setCompletedApplications] = useState(null)
+
+  useEffect(() => {
+    if (!completedApplications) return
+    markApplicationSubmitted()
+    track('application_submitted', { applications: completedApplications.length })
+  }, [completedApplications])
 
   return (
     <>

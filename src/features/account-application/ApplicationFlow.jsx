@@ -37,6 +37,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import Button from '../../components/ui/Button'
 import FormField, { formControlClasses } from '../../components/ui/FormField'
 import GoogleRecaptcha from '../../components/ui/GoogleRecaptcha'
+import useApplicationTracking from '../../analytics/useApplicationTracking'
 import { getProductImageUrl } from '../../utils/productImages'
 import {
   applicationRequest,
@@ -1217,6 +1218,9 @@ export default function ApplicationFlow({ onComplete }) {
   const topRef = useRef(null)
 
   const applicationIds = useMemo(() => applications.map((item) => item.applicationId).filter(Boolean), [applications])
+
+  // Observational only - reads state, never writes it.
+  useApplicationTracking({ step, values, errors, applicationIds })
 
   const change = (key, value) => {
     setValues((current) => ({ ...current, [key]: value }))
