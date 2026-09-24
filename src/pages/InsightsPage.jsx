@@ -183,22 +183,29 @@ function Dashboard({ onLock }) {
         <StatTile label="Page views" value={overview.loading ? '—' : number(totals.pageviews)} hint={`${number(totals.visitors)} visitors`} />
         <StatTile label="Sessions" value={overview.loading ? '—' : number(totals.sessions)} />
         <StatTile
-          label="Applications started"
+          label="Merchant applications started"
           value={overview.loading ? '—' : number(totals.app_starts)}
           hint={`${number(totals.app_submits)} submitted · ${rate(totals.app_submits, totals.app_starts)} completion`}
         />
         <StatTile
-          label="Applications abandoned"
+          label="Merchant applications abandoned"
           value={overview.loading ? '—' : number(totals.app_abandons)}
           hint={`${rate(totals.app_abandons, totals.app_starts)} of those started`}
           tone="warn"
         />
       </div>
 
-      <div className="mt-4 grid gap-4 sm:grid-cols-3">
-        <StatTile label="Forms started" value={overview.loading ? '—' : number(totals.form_starts)} />
-        <StatTile label="Forms submitted" value={overview.loading ? '—' : number(totals.form_submits)} hint={`${rate(totals.form_submits, totals.form_starts)} completion`} />
-        <StatTile label="Forms abandoned" value={overview.loading ? '—' : number(totals.form_abandons)} tone="warn" />
+      <div className="mt-8">
+        <h2 className="text-base font-bold text-navy">Other website forms</h2>
+        <p className="mt-1 text-sm text-slate-500">
+          Contact, careers, referral, partner program, product order and sign-in. The merchant application is a
+          nine-step flow, not a single form, so it is counted in the tiles above rather than here.
+        </p>
+        <div className="mt-4 grid gap-4 sm:grid-cols-3">
+          <StatTile label="Forms started" value={overview.loading ? '—' : number(totals.form_starts)} />
+          <StatTile label="Forms submitted" value={overview.loading ? '—' : number(totals.form_submits)} hint={`${rate(totals.form_submits, totals.form_starts)} completion`} />
+          <StatTile label="Forms abandoned" value={overview.loading ? '—' : number(totals.form_abandons)} tone="warn" />
+        </div>
       </div>
 
       <div className="mt-6 grid gap-5">
@@ -289,7 +296,7 @@ function Dashboard({ onLock }) {
       </div>
 
       <div className="mt-5 grid gap-5 lg:grid-cols-2">
-        <Panel title="Form completion" subtitle="Started versus submitted, per form.">
+        <Panel title="Form completion" subtitle="Started versus submitted, per form. Excludes the merchant application.">
           <PanelState query={forms}>
             {forms.rows.length ? (
               <DataTable
