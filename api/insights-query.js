@@ -13,12 +13,73 @@
 //     record can be read, changed or deleted through this endpoint.
 //   - It is POST-only and returns rows. It never writes.
 
+import { createHash, timingSafeEqual } from 'node:crypto'
+
 const POSTHOG_HOST = (process.env.POSTHOG_API_HOST || 'https://us.posthog.com').replace(/\/$/, '')
 const PROJECT_ID = process.env.POSTHOG_PROJECT_ID
 const READ_KEY = process.env.POSTHOG_READ_KEY
 const PASSWORD = process.env.INSIGHTS_PASSWORD
 
 const since = (days) => `timestamp > now() - INTERVAL ${days} DAY`
+
+/**
+ * Constant-time password comparison.
+ *
+ * A plain `!==` returns as soon as two strings differ, so how long it takes
+ * leaks how much of the password was correct. Hashing first normalizes length
+ * (timingSafeEqual throws on mismatched buffers, which would leak length too).
+ */
+function passwordMatches(supplied) {
+  if (typeof supplied !== 'string' || !supplied) return false
+  const a = createHash('sha256').update(supplied).digest()
+  const b = createHash('sha256').update(PASSWORD).digest()
+  return timingSafeEqual(a, b)
+}
+
+/**
+ * Per-IP throttle on failed sign-ins.
+ *
+ * Serverless instances are ephemeral and not shared, so this is a speed bump
+ * rather than a guarantee - an attacker spread across many cold starts sees a
+ * weaker limit. Combined with a long random password it makes online guessing
+ * impractical, which is the threat that matters here. It is not a substitute
+ * for that password being strong.
+ */
+const FAILURE_WINDOW_MS = 10 * 60 * 1000
+const MAX_FAILURES = 8
+const failures = new Map()
+
+function clientIp(req) {
+  const forwarded = req.headers['x-forwarded-for']
+  if (typeof forwarded === 'string' && forwarded) return forwarded.split(',')[0].trim()
+  return req.headers['x-real-ip'] || req.socket?.remoteAddress || 'unknown'
+}
+
+function isLockedOut(ip) {
+  const record = failures.get(ip)
+  if (!record) return false
+  if (Date.now() - record.first > FAILURE_WINDOW_MS) {
+    failures.delete(ip)
+    return false
+  }
+  return record.count >= MAX_FAILURES
+}
+
+function recordFailure(ip) {
+  const record = failures.get(ip)
+  if (!record || Date.now() - record.first > FAILURE_WINDOW_MS) {
+    failures.set(ip, { count: 1, first: Date.now() })
+    return
+  }
+  record.count += 1
+
+  // Bound memory on a long-lived warm instance.
+  if (failures.size > 5000) {
+    for (const [key, value] of failures) {
+      if (Date.now() - value.first > FAILURE_WINDOW_MS) failures.delete(key)
+    }
+  }
+}
 
 const QUERIES = {
   overview: (d) => `
@@ -167,10 +228,20 @@ export default async function handler(req, res) {
     return res.status(503).json({ error: 'Dashboard is not configured on this deployment.' })
   }
 
-  const supplied = req.headers['x-dashboard-password']
-  if (typeof supplied !== 'string' || supplied !== PASSWORD) {
+  const ip = clientIp(req)
+  if (isLockedOut(ip)) {
+    res.setHeader('Retry-After', '600')
+    return res.status(429).json({ error: 'Too many attempts. Try again later.' })
+  }
+
+  if (!passwordMatches(req.headers['x-dashboard-password'])) {
+    recordFailure(ip)
+    // Slow automated guessing without noticeably affecting a real mistype.
+    await new Promise((resolve) => setTimeout(resolve, 400))
     return res.status(401).json({ error: 'Invalid dashboard password.' })
   }
+
+  failures.delete(ip)
 
   const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {})
   const build = QUERIES[body.query]
