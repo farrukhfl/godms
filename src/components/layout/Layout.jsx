@@ -1,11 +1,14 @@
 import { useEffect } from 'react'
 import { Outlet, ScrollRestoration, useLocation } from 'react-router-dom'
+import usePageTracking from '../../analytics/usePageTracking'
 import { getCustomerAccessToken } from '../../utils/customerToken'
 import Footer from './Footer'
 import Navbar from './Navbar'
 
 export default function Layout() {
   const location = useLocation()
+
+  usePageTracking()
 
   useEffect(() => {
     getCustomerAccessToken().catch(() => {

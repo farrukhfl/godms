@@ -13,6 +13,7 @@ const CareersPage = lazy(() => import('./pages/CareersPage'))
 const CategoryPageTemplate = lazy(() => import('./pages/CategoryPageTemplate'))
 const ContactPage = lazy(() => import('./pages/ContactPage'))
 const HomePage = lazy(() => import('./pages/HomePage'))
+const InsightsPage = lazy(() => import('./pages/InsightsPage'))
 const LegalPage = lazy(() => import('./pages/LegalPage'))
 const OpenAccountPage = lazy(() => import('./pages/OpenAccountPage'))
 const PartnerProgramPage = lazy(() => import('./pages/PartnerProgramPage'))
@@ -95,6 +96,9 @@ const router = createBrowserRouter([
       { path: '*', element: <SuspenseWrapper><PlaceholderPage title="404 - Page Not Found" description="The page you requested may have moved or is not available." /></SuspenseWrapper> },
     ],
   },
+  // Internal dashboard: outside Layout, so it carries no site navigation and
+  // is not part of the public page structure.
+  { path: '/insights', element: <SuspenseWrapper><InsightsPage /></SuspenseWrapper> },
 ])
 
 export default function App() {

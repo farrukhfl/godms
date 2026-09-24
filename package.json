@@ -15,6 +15,7 @@
   },
   "dependencies": {
     "lucide-react": "^1.28.0",
+    "posthog-js": "^1.434.12",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "react-helmet-async": "^3.0.0",
