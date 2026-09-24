@@ -104,11 +104,14 @@ const QUERIES = {
     FROM events WHERE ${since(d)}
     GROUP BY day ORDER BY day`,
 
+  // Dashboard paths are filtered here as well as at collection time, so rows
+  // recorded before the exclusion existed stay out of the site's page figures.
   top_pages: (d) => `
     SELECT properties.$pathname AS path,
       count() AS views,
       uniq(distinct_id) AS visitors
     FROM events WHERE event = '$pageview' AND ${since(d)}
+      AND properties.$pathname NOT LIKE '/insight%'
     GROUP BY path ORDER BY views DESC LIMIT 25`,
 
   // PostHog records direct traffic as the literal string '$direct', so it is
