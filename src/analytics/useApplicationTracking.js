@@ -14,7 +14,7 @@ const MIN_ABANDON_SECONDS = 2
  * back into it, so no validation, save or submit path is affected. Deleting
  * this hook leaves the application behaving identically.
  */
-export default function useApplicationTracking({ step, values, errors, applicationIds }) {
+export default function useApplicationTracking({ step, values, errors, applicationIds, error, solutions, plans }) {
   const enteredAt = useRef(Date.now())
   const mountedAt = useRef(Date.now())
   const furthestStep = useRef(0)
@@ -23,6 +23,9 @@ export default function useApplicationTracking({ step, values, errors, applicati
   const abandonSent = useRef(false)
   const identified = useRef('')
   const lastErrorSignature = useRef('')
+  const lastFailure = useRef('')
+  const lastSolutions = useRef('')
+  const lastPlans = useRef('')
 
   // Mirror of the latest state, so the unload handler can report current
   // position without re-registering its listeners on every keystroke.
@@ -75,6 +78,45 @@ export default function useApplicationTracking({ step, values, errors, applicati
       fields: failed,
     })
   }, [errors, step])
+
+  // Request failures, read from the error banner the flow already renders.
+  //
+  // Without this, a merchant blocked by a failing save looks identical to one
+  // who changed their mind. Separating the two turns a drop in completions into
+  // something that can be acted on, rather than guessed at.
+  useEffect(() => {
+    const message = String(error || '').trim()
+    if (!message || message === lastFailure.current) return
+    lastFailure.current = message
+
+    track('application_failure', {
+      step_name: stepLabel(step),
+      step_index: step + 1,
+      message,
+    })
+  }, [error, step])
+
+  // What the applicant is asking for. Business mix rather than behaviour, and
+  // the reason a step-level funnel alone cannot answer "what do people want".
+  useEffect(() => {
+    const list = Array.isArray(solutions) ? [...solutions].sort() : []
+    if (!list.length) return
+    const signature = list.join(',')
+    if (signature === lastSolutions.current) return
+    lastSolutions.current = signature
+
+    track('application_services_selected', { services: list, service_count: list.length })
+  }, [solutions])
+
+  useEffect(() => {
+    const chosen = Object.values(plans || {}).filter(Boolean).sort()
+    if (!chosen.length) return
+    const signature = chosen.join(',')
+    if (signature === lastPlans.current) return
+    lastPlans.current = signature
+
+    track('application_plan_selected', { plans: chosen })
+  }, [plans])
 
   // Attach contact details so an abandoned application can be followed up.
   //

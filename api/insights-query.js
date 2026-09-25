@@ -219,6 +219,92 @@ const QUERIES = {
     GROUP BY step_index, step_name
     ORDER BY abandons DESC`,
 
+  // How long each step actually takes. A step that is slow is a step that is
+  // hard, and the funnel alone cannot tell the difference.
+  application_step_timing: (d) => `
+    SELECT
+      toInt(properties.step_index) AS step_index,
+      any(properties.step_name) AS step_name,
+      round(avg(toFloat(properties.seconds_spent))) AS avg_seconds,
+      round(median(toFloat(properties.seconds_spent))) AS median_seconds,
+      round(max(toFloat(properties.seconds_spent))) AS slowest_seconds,
+      count() AS completions
+    FROM events
+    WHERE event = 'application_step_completed' AND ${since(d)}
+      AND toFloat(properties.seconds_spent) > 0
+    GROUP BY step_index ORDER BY step_index`,
+
+  // The individual fields people get wrong, not just the step they were on.
+  // Array properties arrive as nullable JSON strings, hence the unwrapping.
+  application_error_fields: (d) => `
+    SELECT
+      replaceAll(arrayJoin(JSONExtractArrayRaw(coalesce(toString(properties.fields), '[]'))), '"', '') AS field,
+      any(properties.step_name) AS step_name,
+      count() AS failures,
+      uniq(person_id) AS people
+    FROM events WHERE event = 'application_step_error' AND ${since(d)}
+    GROUP BY field ORDER BY failures DESC LIMIT 25`,
+
+  // Going back means something earlier was unclear or entered wrongly.
+  application_back_steps: (d) => `
+    SELECT
+      toInt(properties.step_index) AS step_index,
+      any(properties.step_name) AS step_name,
+      count() AS times_back,
+      uniq(person_id) AS people
+    FROM events WHERE event = 'application_step_back' AND ${since(d)}
+    GROUP BY step_index ORDER BY times_back DESC`,
+
+  // Completion split by device. A nine-step form with document uploads behaves
+  // very differently on a phone, and an averaged funnel hides that entirely.
+  funnel_by_device: (d) => `
+    SELECT
+      coalesce(nullIf(properties.$device_type, ''), 'Unknown') AS device,
+      uniq(person_id) AS started,
+      uniqIf(person_id, toInt(properties.step_index) >= 5) AS reached_halfway,
+      uniqIf(person_id, toInt(properties.step_index) = 9) AS reached_submit
+    FROM events WHERE event = 'application_step_viewed' AND ${since(d)}
+    GROUP BY device ORDER BY started DESC`,
+
+  // Requests that failed on the applicant. These are outages, not indecision.
+  application_failures: (d) => `
+    SELECT
+      any(properties.step_name) AS step_name,
+      toInt(properties.step_index) AS step_index,
+      properties.message AS message,
+      count() AS occurrences,
+      uniq(person_id) AS people,
+      max(timestamp) AS last_seen
+    FROM events WHERE event = 'application_failure' AND ${since(d)}
+    GROUP BY step_index, message
+    ORDER BY occurrences DESC LIMIT 25`,
+
+  // What applicants are actually asking for.
+  application_services: (d) => `
+    SELECT
+      replaceAll(arrayJoin(JSONExtractArrayRaw(coalesce(toString(properties.services), '[]'))), '"', '') AS service,
+      uniq(person_id) AS applicants
+    FROM events WHERE event = 'application_services_selected' AND ${since(d)}
+    GROUP BY service ORDER BY applicants DESC`,
+
+  application_plans: (d) => `
+    SELECT
+      replaceAll(arrayJoin(JSONExtractArrayRaw(coalesce(toString(properties.plans), '[]'))), '"', '') AS plan,
+      uniq(person_id) AS applicants
+    FROM events WHERE event = 'application_plan_selected' AND ${since(d)}
+    GROUP BY plan ORDER BY applicants DESC`,
+
+  // JavaScript errors real visitors hit.
+  site_errors: (d) => `
+    SELECT
+      properties.$exception_message AS message,
+      properties.$pathname AS path,
+      count() AS occurrences,
+      uniq(person_id) AS people,
+      max(timestamp) AS last_seen
+    FROM events WHERE event = '$exception' AND ${since(d)}
+    GROUP BY message, path ORDER BY occurrences DESC LIMIT 25`,
+
   // Validation errors are the usual reason a step leaks.
   application_errors: (d) => `
     SELECT

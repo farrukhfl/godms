@@ -5,7 +5,36 @@
 // so no call site can bypass the redaction guards in redact.js.
 
 import { ANALYTICS_ENABLED, POSTHOG_HOST, POSTHOG_KEY } from './config'
-import { sanitizePerson, sanitizeProperties } from './redact'
+import { isSensitiveValue, sanitizePerson, sanitizeProperties } from './redact'
+
+/**
+ * Last line of defence for events the SDK raises itself.
+ *
+ * Autocaptured exceptions do not pass through track(), so they never meet the
+ * redaction guards. A thrown error can carry whatever string was being handled
+ * at the time, which in this application could be a bank or tax number. Rather
+ * than truncating stack traces and losing their value, an exception whose text
+ * looks like it carries regulated data is dropped in full.
+ *
+ * Only the human-readable fields are examined. Scanning the whole payload would
+ * match millisecond timestamps as long digit runs and discard every exception.
+ */
+function beforeSend(event) {
+  if (!event || event.event !== '$exception') return event
+
+  const properties = event.properties || {}
+  const text = [
+    properties.$exception_message,
+    properties.$exception_stack_trace_raw,
+    ...(Array.isArray(properties.$exception_list)
+      ? properties.$exception_list.flatMap((item) => [item?.value, item?.type])
+      : []),
+  ]
+    .filter((part) => typeof part === 'string')
+    .join(' ')
+
+  return isSensitiveValue(text) ? null : event
+}
 
 let posthogPromise = null
 let posthog = null
@@ -55,6 +84,10 @@ export function initAnalytics() {
         respect_dnt: true,
         mask_all_text: true,
         mask_all_element_attributes: true,
+        // Surfaces JavaScript errors real visitors hit, so a broken build is
+        // noticed before someone phones in. Guarded by beforeSend above.
+        capture_exceptions: true,
+        before_send: beforeSend,
       })
 
       posthog = client

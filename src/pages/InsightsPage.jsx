@@ -29,6 +29,19 @@ const RANGES = [
 const number = (value) => Number(value || 0).toLocaleString('en-US')
 const rate = (part, whole) => (Number(whole) > 0 ? `${Math.round((Number(part) / Number(whole)) * 100)}%` : '—')
 
+/** Seconds are hard to read past a minute or two. */
+const duration = (seconds) => {
+  const total = Math.round(Number(seconds) || 0)
+  if (!total) return '—'
+  if (total < 60) return `${total}s`
+  const minutes = Math.floor(total / 60)
+  const rest = total % 60
+  if (minutes < 60) return rest ? `${minutes}m ${rest}s` : `${minutes}m`
+  return `${Math.floor(minutes / 60)}h ${minutes % 60}m`
+}
+
+const when = (value) => (value ? String(value).slice(0, 16).replace('T', ' ') : '—')
+
 /** Each panel reports its own failure, so one bad query cannot blank the page. */
 function PanelState({ query, children, skeleton = 4 }) {
   if (query.loading) return <Skeleton rows={skeleton} />
@@ -116,6 +129,14 @@ function Dashboard({ onLock }) {
   const funnel = useInsights('application_funnel', days)
   const dropoff = useInsights('application_dropoff', days)
   const errorsByStep = useInsights('application_errors', days)
+  const errorFields = useInsights('application_error_fields', days)
+  const stepTiming = useInsights('application_step_timing', days)
+  const backSteps = useInsights('application_back_steps', days)
+  const byDevice = useInsights('funnel_by_device', days)
+  const failures = useInsights('application_failures', days)
+  const services = useInsights('application_services', days)
+  const planChoices = useInsights('application_plans', days)
+  const siteErrors = useInsights('site_errors', days)
   const leads = useInsights('abandoned_leads', days)
   const forms = useInsights('form_performance', days)
   const formFields = useInsights('form_dropoff_fields', days)
@@ -125,7 +146,9 @@ function Dashboard({ onLock }) {
   const devices = useInsights('devices', days)
   const countries = useInsights('countries', days)
 
-  const all = [overview, appSummary, trend, funnel, dropoff, errorsByStep, leads, forms, formFields, pages, sources, campaigns, devices, countries]
+  const all = [overview, appSummary, trend, funnel, dropoff, errorsByStep, errorFields, stepTiming,
+    backSteps, byDevice, failures, services, planChoices, siteErrors, leads, forms, formFields,
+    pages, sources, campaigns, devices, countries]
   const refreshAll = () => all.forEach((query) => query.refresh())
 
   const totals = overview.rows[0] || {}
@@ -301,6 +324,133 @@ function Dashboard({ onLock }) {
         </Panel>
       </div>
 
+      <div className="mt-5 grid gap-5 lg:grid-cols-2">
+        <Panel
+          title="How long each step takes"
+          subtitle="A step people linger on is usually a step they find hard. Compare the typical time against the worst case."
+        >
+          <PanelState query={stepTiming} skeleton={6}>
+            <DataTable
+              rows={stepTiming.rows}
+              emptyText="No completed steps in this period yet."
+              columns={[
+                { key: 'step_name', label: 'Step', render: (row) => `${row.step_index}. ${row.step_name}` },
+                { key: 'median_seconds', label: 'Typical', render: (row) => duration(row.median_seconds) },
+                { key: 'avg_seconds', label: 'Average', render: (row) => duration(row.avg_seconds) },
+                { key: 'slowest_seconds', label: 'Slowest', render: (row) => duration(row.slowest_seconds) },
+              ]}
+            />
+          </PanelState>
+        </Panel>
+
+        <Panel
+          title="Fields people get wrong"
+          subtitle="The exact inputs that fail validation. These are usually fixable with a clearer label or input format."
+        >
+          <PanelState query={errorFields}>
+            <BarList
+              rows={errorFields.rows}
+              labelKey="field"
+              valueKey="failures"
+              secondaryKey="people"
+              secondaryLabel="people"
+              emptyText="No validation errors recorded."
+              color={CRITICAL}
+            />
+          </PanelState>
+        </Panel>
+
+        <Panel
+          title="Phone versus computer"
+          subtitle="A nine-step form with document uploads is far harder on a phone. If mobile completion lags, that is the fix with the most upside."
+        >
+          <PanelState query={byDevice} skeleton={3}>
+            <DataTable
+              rows={byDevice.rows}
+              emptyText="No application activity in this period."
+              columns={[
+                { key: 'device', label: 'Device' },
+                { key: 'started', label: 'Started', render: (row) => number(row.started) },
+                { key: 'reached_halfway', label: 'Reached step 5', render: (row) => number(row.reached_halfway) },
+                { key: 'reached_submit', label: 'Reached submit', render: (row) => number(row.reached_submit) },
+                {
+                  key: 'through',
+                  label: 'Got to the end',
+                  render: (row) => rate(row.reached_submit, row.started),
+                },
+              ]}
+            />
+          </PanelState>
+        </Panel>
+
+        <Panel
+          title="Steps people go back to"
+          subtitle="Going backwards means something earlier was unclear or entered wrongly."
+        >
+          <PanelState query={backSteps}>
+            <BarList
+              rows={backSteps.rows}
+              labelKey="step_name"
+              valueKey="times_back"
+              secondaryKey="people"
+              secondaryLabel="people"
+              emptyText="Nobody has gone back a step in this period."
+            />
+          </PanelState>
+        </Panel>
+      </div>
+
+      <div className="mt-5">
+        <Panel
+          title="Applications blocked by an error on our side"
+          subtitle="These merchants did not change their mind — something failed while they were trying to proceed. Anything appearing here is worth investigating today."
+        >
+          <PanelState query={failures} skeleton={3}>
+            <DataTable
+              rows={failures.rows}
+              emptyText="No failed requests. Every applicant who left did so by choice."
+              columns={[
+                { key: 'step_name', label: 'Step', render: (row) => `${row.step_index}. ${row.step_name}` },
+                { key: 'message', label: 'What the applicant saw' },
+                { key: 'occurrences', label: 'Times', render: (row) => number(row.occurrences) },
+                { key: 'people', label: 'People', render: (row) => number(row.people) },
+                { key: 'last_seen', label: 'Last seen', render: (row) => when(row.last_seen) },
+              ]}
+            />
+          </PanelState>
+        </Panel>
+      </div>
+
+      <SectionHeading
+        title="What applicants are asking for"
+        description="Demand mix and pricing preference, taken from the choices made inside the application."
+      />
+
+      <div className="grid gap-5 lg:grid-cols-2">
+        <Panel title="Services requested" subtitle="Selected on the first step. One applicant can choose several.">
+          <PanelState query={services}>
+            <BarList
+              rows={services.rows}
+              labelKey="service"
+              valueKey="applicants"
+              emptyText="No services recorded yet. This fills in as new applications come through."
+            />
+          </PanelState>
+        </Panel>
+
+        <Panel title="Pricing plans chosen" subtitle="Cash Discount, Surcharge, Interchange or Flat Rate.">
+          <PanelState query={planChoices}>
+            <BarList
+              rows={planChoices.rows}
+              labelKey="plan"
+              valueKey="applicants"
+              color={SERIES_2}
+              emptyText="No plans recorded yet. This fills in as new applications reach the plan step."
+            />
+          </PanelState>
+        </Panel>
+      </div>
+
       <SectionHeading
         title="Other website forms"
         description="Contact, careers, referral, partner program, product order and sign-in. The merchant application is a nine-step flow rather than a single form, so it is counted in the section above."
@@ -401,6 +551,27 @@ function Dashboard({ onLock }) {
           </div>
         </Panel>
       </div>
+
+        <SectionHeading
+          title="Site health"
+          description="Problems real visitors hit in their browser, which otherwise only surface when someone phones in."
+        />
+
+        <Panel title="JavaScript errors" subtitle="Grouped by message and the page they happened on.">
+          <PanelState query={siteErrors} skeleton={3}>
+            <DataTable
+              rows={siteErrors.rows}
+              emptyText="No JavaScript errors recorded. The site is behaving for real visitors."
+              columns={[
+                { key: 'message', label: 'Error' },
+                { key: 'path', label: 'Page' },
+                { key: 'occurrences', label: 'Times', render: (row) => number(row.occurrences) },
+                { key: 'people', label: 'People', render: (row) => number(row.people) },
+                { key: 'last_seen', label: 'Last seen', render: (row) => when(row.last_seen) },
+              ]}
+            />
+          </PanelState>
+        </Panel>
 
         <p className="mt-10 border-t border-slate-200 pt-5 text-xs leading-5 text-slate-400">
           This dashboard reads analytics only. It holds no merchant or banking credential and cannot create, change or
