@@ -90,10 +90,32 @@ function withClient(run) {
   })
 }
 
-/** Records an event. Properties are sanitized before they leave the browser. */
-export function track(event, properties = {}) {
+/**
+ * Records an event. Properties are sanitized before they leave the browser.
+ *
+ * Pass `{ beacon: true }` for anything captured while the page is going away.
+ * The SDK's normal transport is XHR or fetch, and the browser cancels those
+ * in-flight requests when a tab closes - our `pagehide` listener runs before
+ * PostHog's own, so it does not benefit from the SDK's internal beacon switch.
+ * `sendBeacon` is handed to the browser and survives the page's death, which is
+ * the difference between recording an abandonment and losing it.
+ */
+export function track(event, properties = {}, options = {}) {
   withClient((client) => {
-    client.capture(event, sanitizeProperties(properties) || {})
+    const captureOptions = options.beacon
+      ? { transport: 'sendBeacon', send_instantly: true }
+      : undefined
+
+    client.capture(event, sanitizeProperties(properties) || {}, captureOptions)
+
+    // Drain anything still queued while the page is alive to do it.
+    if (options.beacon && typeof client.flush === 'function') {
+      try {
+        client.flush('sendBeacon')
+      } catch {
+        // Older SDKs without flush(): the capture above already used a beacon.
+      }
+    }
   })
 }
 

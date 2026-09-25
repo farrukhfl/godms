@@ -109,14 +109,19 @@ export function flushFormAbandonment(reason, pathOverride) {
         continue
       }
 
-      track('form_abandoned', {
-        form_name: state.name,
-        path: pathOverride || state.path,
-        reason,
-        last_field: state.lastField || 'none',
-        fields_completed: state.touched.size,
-        seconds_spent: Math.round((Date.now() - state.startedAt) / 1000),
-      })
+      track(
+        'form_abandoned',
+        {
+          form_name: state.name,
+          path: pathOverride || state.path,
+          reason,
+          last_field: state.lastField || 'none',
+          fields_completed: state.touched.size,
+          seconds_spent: Math.round((Date.now() - state.startedAt) / 1000),
+        },
+        // Sent on pagehide too, where a normal request would be cancelled.
+        { beacon: true },
+      )
       forms.delete(form)
     }
   } catch {

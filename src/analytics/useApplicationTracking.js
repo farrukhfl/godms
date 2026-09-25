@@ -111,16 +111,21 @@ export default function useApplicationTracking({ step, values, errors, applicati
       if (Date.now() - mountedAt.current < MIN_ABANDON_SECONDS * 1000) return
       abandonSent.current = true
 
-      track('application_abandoned', {
-        reason,
-        step_name: stepLabel(snapshot.current.step),
-        step_index: snapshot.current.step + 1,
-        furthest_step_name: stepLabel(furthestStep.current),
-        furthest_step_index: furthestStep.current + 1,
-        seconds_on_step: Math.round((Date.now() - enteredAt.current) / 1000),
-        seconds_in_application: Math.round((Date.now() - mountedAt.current) / 1000),
-        has_saved_application: (snapshot.current.applicationIds || []).length > 0,
-      })
+      track(
+        'application_abandoned',
+        {
+          reason,
+          step_name: stepLabel(snapshot.current.step),
+          step_index: snapshot.current.step + 1,
+          furthest_step_name: stepLabel(furthestStep.current),
+          furthest_step_index: furthestStep.current + 1,
+          seconds_on_step: Math.round((Date.now() - enteredAt.current) / 1000),
+          seconds_in_application: Math.round((Date.now() - mountedAt.current) / 1000),
+          has_saved_application: (snapshot.current.applicationIds || []).length > 0,
+        },
+        // The tab may be closing, so this must go out by beacon or not at all.
+        { beacon: true },
+      )
     }
 
     // `pagehide` is the dependable close/navigate signal; `beforeunload`
