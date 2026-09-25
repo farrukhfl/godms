@@ -111,6 +111,7 @@ function Dashboard({ onLock }) {
   const [days, setDays] = useState(30)
 
   const overview = useInsights('overview', days)
+  const appSummary = useInsights('application_summary', days)
   const trend = useInsights('daily_trend', days)
   const funnel = useInsights('application_funnel', days)
   const dropoff = useInsights('application_dropoff', days)
@@ -124,10 +125,11 @@ function Dashboard({ onLock }) {
   const devices = useInsights('devices', days)
   const countries = useInsights('countries', days)
 
-  const all = [overview, trend, funnel, dropoff, errorsByStep, leads, forms, formFields, pages, sources, campaigns, devices, countries]
+  const all = [overview, appSummary, trend, funnel, dropoff, errorsByStep, leads, forms, formFields, pages, sources, campaigns, devices, countries]
   const refreshAll = () => all.forEach((query) => query.refresh())
 
   const totals = overview.rows[0] || {}
+  const app = appSummary.rows[0] || {}
   const spark = (key) => trend.rows.map((row) => row[key])
 
   return (
@@ -194,32 +196,32 @@ function Dashboard({ onLock }) {
             />
             <StatTile
               label="Applications started"
-              value={number(totals.app_starts)}
-              hint={`${number(totals.app_submits)} submitted`}
-              loading={overview.loading}
+              value={number(app.started)}
+              hint={`${number(app.submitted)} submitted${Number(app.in_progress) > 0 ? ` · ${number(app.in_progress)} still in progress` : ''}`}
+              loading={appSummary.loading}
               spark={spark('app_starts')}
               sparkColor={SERIES_2}
             />
             <StatTile
               label="Completion rate"
-              value={rate(totals.app_submits, totals.app_starts)}
+              value={rate(app.submitted, app.started)}
               hint="Applications started that were submitted"
               tone="good"
-              loading={overview.loading}
+              loading={appSummary.loading}
             />
             <StatTile
               label="Applications abandoned"
-              value={number(totals.app_abandons)}
-              hint={`${rate(totals.app_abandons, totals.app_starts)} of those started`}
+              value={number(app.abandoned)}
+              hint={`${rate(app.abandoned, app.started)} of those started`}
               tone="warn"
-              loading={overview.loading}
+              loading={appSummary.loading}
             />
           </div>
         </div>
 
         <SectionHeading
           title="Merchant application"
-          description="The nine-step flow at /open-an-account. This is where the money is won or lost."
+          description="The nine-step flow at /open-an-account. An application counts as abandoned once it has gone 30 minutes untouched without being submitted, so nothing is missed when a browser closes without warning."
         />
 
         <div className="grid gap-5 lg:grid-cols-5">
@@ -274,8 +276,8 @@ function Dashboard({ onLock }) {
             <DataTable
               rows={leads.rows}
               emptyText={
-                Number(totals.app_abandons) > 0
-                  ? `Nobody to follow up. There ${Number(totals.app_abandons) === 1 ? 'was 1 abandonment' : `were ${number(totals.app_abandons)} abandonments`} in this period, but each was either left before contact details were entered, or by someone who came back and submitted.`
+                Number(app.abandoned) > 0
+                  ? `Nobody to follow up. ${Number(app.abandoned) === 1 ? '1 application was' : `${number(app.abandoned)} applications were`} abandoned in this period, but each was left before an email address was entered.`
                   : 'No abandoned applications in this period.'
               }
               columns={[
