@@ -1220,7 +1220,7 @@ export default function ApplicationFlow({ onComplete }) {
   const applicationIds = useMemo(() => applications.map((item) => item.applicationId).filter(Boolean), [applications])
 
   // Observational only - reads state, never writes it.
-  useApplicationTracking({ step, values, errors, applicationIds })
+  useApplicationTracking({ step, values, errors, applicationIds, error, solutions, plans })
 
   const change = (key, value) => {
     setValues((current) => ({ ...current, [key]: value }))
