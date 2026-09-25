@@ -22,6 +22,37 @@ const PASSWORD = process.env.INSIGHTS_PASSWORD
 
 const since = (days) => `timestamp > now() - INTERVAL ${days} DAY`
 
+// How long an application must be untouched before it counts as abandoned
+// rather than still in progress. Someone mid-form who steps away for coffee
+// should not appear in a follow-up list.
+const IDLE_MINUTES = 30
+
+// Abandonment is derived, not captured.
+//
+// Any event fired as a page dies is unreliable: a crash, a flat battery, a
+// force-quit or a dropped connection sends nothing at all, and browsers cancel
+// in-flight requests during unload. Step views, by contrast, are recorded while
+// the page is alive and healthy.
+//
+// So an abandoned application is defined as a person who reached a step, never
+// submitted, and has not been seen since. Nothing can be missed, because the
+// evidence was already collected before they left.
+const abandonedPeople = (days) => `
+  SELECT
+    person_id,
+    max(toInt(properties.step_index)) AS furthest_step,
+    argMax(properties.step_name, toInt(properties.step_index)) AS furthest_step_name,
+    min(timestamp) AS first_seen,
+    max(timestamp) AS last_seen
+  FROM events
+  WHERE event = 'application_step_viewed' AND ${since(days)}
+  GROUP BY person_id
+  HAVING last_seen < now() - INTERVAL ${IDLE_MINUTES} MINUTE
+    AND person_id NOT IN (
+      SELECT person_id FROM events
+      WHERE event = 'application_submitted' AND ${since(days)}
+    )`
+
 /**
  * Constant-time password comparison.
  *
@@ -89,11 +120,28 @@ const QUERIES = {
       uniq(properties.$session_id) AS sessions,
       countIf(event = 'form_started') AS form_starts,
       countIf(event = 'form_submitted') AS form_submits,
-      countIf(event = 'form_abandoned') AS form_abandons,
-      countIf(event = 'application_started') AS app_starts,
-      countIf(event = 'application_submitted') AS app_submits,
-      countIf(event = 'application_abandoned') AS app_abandons
+      countIf(event = 'form_abandoned') AS form_abandons
     FROM events WHERE ${since(d)}`,
+
+  // Application totals, counted per person rather than per event, with
+  // abandonment derived from inactivity instead of a departure signal.
+  application_summary: (d) => `
+    SELECT
+      (SELECT uniq(person_id) FROM events
+        WHERE event = 'application_step_viewed' AND ${since(d)}) AS started,
+      (SELECT uniq(person_id) FROM events
+        WHERE event = 'application_submitted' AND ${since(d)}) AS submitted,
+      (SELECT count() FROM (${abandonedPeople(d)})) AS abandoned,
+      (SELECT count() FROM (
+        SELECT person_id, max(timestamp) AS last_seen
+        FROM events WHERE event = 'application_step_viewed' AND ${since(d)}
+        GROUP BY person_id
+        HAVING last_seen >= now() - INTERVAL ${IDLE_MINUTES} MINUTE
+          AND person_id NOT IN (
+            SELECT person_id FROM events
+            WHERE event = 'application_submitted' AND ${since(d)}
+          )
+      )) AS in_progress`,
 
   daily_trend: (d) => `
     SELECT toDate(timestamp) AS day,
@@ -160,15 +208,16 @@ const QUERIES = {
       AND ${since(d)}
     GROUP BY step_index ORDER BY step_index`,
 
-  // Where people give up, by the furthest step they reached before leaving.
+  // Where people give up, by the furthest step they reached.
   application_dropoff: (d) => `
     SELECT
-      toInt(properties.furthest_step_index) AS step_index,
-      any(properties.furthest_step_name) AS step_name,
+      furthest_step AS step_index,
+      furthest_step_name AS step_name,
       count() AS abandons,
-      round(avg(toFloat(properties.seconds_in_application))) AS avg_seconds
-    FROM events WHERE event = 'application_abandoned' AND ${since(d)}
-    GROUP BY step_index ORDER BY abandons DESC`,
+      round(avg(dateDiff('second', first_seen, last_seen))) AS avg_seconds
+    FROM (${abandonedPeople(d)})
+    GROUP BY step_index, step_name
+    ORDER BY abandons DESC`,
 
   // Validation errors are the usual reason a step leaks.
   application_errors: (d) => `
@@ -180,24 +229,26 @@ const QUERIES = {
     FROM events WHERE event = 'application_step_error' AND ${since(d)}
     GROUP BY step_index ORDER BY error_events DESC`,
 
-  // Identified drop-offs for follow-up. Anyone who later submitted is excluded.
+  // Identified drop-offs for follow-up. Derived the same way, so a lead is
+  // listed even if their browser never got to report leaving.
   abandoned_leads: (d) => `
     SELECT
-      person.properties.email AS email,
-      person.properties.name AS name,
-      person.properties.phone AS phone,
-      person.properties.businessName AS business,
-      max(toInt(properties.furthest_step_index)) AS furthest_step,
-      any(properties.furthest_step_name) AS furthest_step_name,
+      argMax(person.properties.email, timestamp) AS email,
+      argMax(person.properties.name, timestamp) AS name,
+      argMax(person.properties.phone, timestamp) AS phone,
+      argMax(person.properties.businessName, timestamp) AS business,
+      max(toInt(properties.step_index)) AS furthest_step,
+      argMax(properties.step_name, toInt(properties.step_index)) AS furthest_step_name,
       max(timestamp) AS last_seen
     FROM events
-    WHERE event = 'application_abandoned' AND ${since(d)}
-      AND person.properties.email != ''
-      AND person.properties.email NOT IN (
-        SELECT person.properties.email FROM events
+    WHERE event = 'application_step_viewed' AND ${since(d)}
+    GROUP BY person_id
+    HAVING isNotNull(email) AND email != ''
+      AND last_seen < now() - INTERVAL ${IDLE_MINUTES} MINUTE
+      AND person_id NOT IN (
+        SELECT person_id FROM events
         WHERE event = 'application_submitted' AND ${since(d)}
       )
-    GROUP BY email, name, phone, business
     ORDER BY last_seen DESC LIMIT 100`,
 
   form_performance: (d) => `
