@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { LockKeyhole, RefreshCw, TriangleAlert } from 'lucide-react'
 import Seo from '../components/Seo'
 import Button from '../components/ui/Button'
+import { APPLICATION_STEP_COUNT } from '../analytics/config'
 import { clearPassword, getPassword, setPassword } from '../features/insights/api'
 import useInsights from '../features/insights/useInsights'
 import {
@@ -285,7 +286,7 @@ function Dashboard({ onLock }) {
                 {
                   key: 'furthest_step_name',
                   label: 'Left at',
-                  render: (row) => `${row.furthest_step_name || '—'} (${row.furthest_step || '?'}/9)`,
+                  render: (row) => `${row.furthest_step_name || '—'} (${row.furthest_step || '?'}/${APPLICATION_STEP_COUNT})`,
                 },
                 {
                   key: 'last_seen',

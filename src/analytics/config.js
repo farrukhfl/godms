@@ -7,17 +7,18 @@ export const POSTHOG_HOST = (import.meta.env.VITE_POSTHOG_HOST || 'https://us.i.
 export const ANALYTICS_ENABLED = Boolean(POSTHOG_KEY)
 
 // Mirrors the `steps` array in features/account-application/ApplicationFlow.jsx.
+// Index here is the wizard's internal step, and step_index reported to PostHog
+// is that index + 1 - which is also the `currentStep` the application API takes.
 export const APPLICATION_STEPS = [
   'Services',
-  'Business',
-  'Ownership',
-  'Financial',
   'Plan',
+  'Information',
   'Hardware',
-  'Preferences',
-  'Delivery',
+  'Shipment',
   'Submit',
 ]
+
+export const APPLICATION_STEP_COUNT = APPLICATION_STEPS.length
 
 export const stepLabel = (index) => APPLICATION_STEPS[index] || `Step ${index + 1}`
 

@@ -51,17 +51,36 @@ import {
   uploadApplicationFile,
 } from './api'
 
+// Screen order and labels. The index of each entry is the wizard's internal
+// `step`; API_STEP_BY_SCREEN below maps it to the `currentStep` the application
+// API expects. Keep the two in step with each other.
 const steps = [
   ['Services', WalletCards],
-  ['Business', Building2],
-  ['Ownership', UserRound],
-  ['Financial', Landmark],
   ['Plan', CreditCard],
+  ['Information', Building2],
   ['Hardware', ShoppingCart],
-  ['Preferences', FileCheck2],
-  ['Delivery', PackageCheck],
+  ['Shipment', PackageCheck],
   ['Submit', PenLine],
 ]
+
+// Canonical `currentStep` values for the application create / update API:
+// 1 Services, 2 Plan, 3 Information, 4 Hardware, 5 Shipment and Payment,
+// 6 Submit. Step 3 is what triggers merchant creation on the server and step 6
+// is what allows a non-draft status, so these must not be posted out of order.
+const API_STEP_BY_SCREEN = [1, 2, 3, 4, 5, 6]
+
+const SCREEN = {
+  services: 0,
+  plan: 1,
+  information: 2,
+  hardware: 3,
+  shipment: 4,
+  submit: 5,
+}
+
+const LAST_SCREEN = steps.length - 1
+
+const apiStep = (screen) => API_STEP_BY_SCREEN[screen]
 
 // Sequence: 1. Credit Card, 2. ATM, 3. Point of Sale, and then other services
 const serviceOrder = [
@@ -209,13 +228,12 @@ const initialValues = {
   taxType: 'FEIN', feinNumber: '', ownerShipType: '', businessStartDate: '', businessType: '', email: '', website: '', productsDescription: '',
   ownerFirstName: '', ownerLastName: '', date: '', ownerSameAsLegal: true, residentialAddress: '', ownerShipZip: '', ownerShipCity: '', ownerShipState: '', ownerPhoneNumber: '', ownerEmail: '', socialSecurityNumber: '', dLFiles: [],
   bankName: '', accountNumber: '', routingNumber: '', bankFiles: [], taxCode: '', averageSale: '', maxSale: '', monthlySale: '', comment: '',
-  // ATM Conditional Fields
-  atmInternetPlan: 'Wireless Cellular Data ($15/month)',
-  atmSurchargeAmount: '3.00',
-  atmOwnershipOption: 'Buy New ATM from Dolphin',
-  atmModel: 'Hyosung Halo II',
-  atmEstimatedMonthlyTransactions: '250 - 500 transactions/mo',
 }
+// ATM configuration (model, ownership option, surcharge, internet plan,
+// estimated transactions) is collected by the `atm1` preferences form on the
+// Information step. It used to be asked a second time on the Plan step and
+// posted as `atmDetails`, which the API accepts and discards - there is no
+// column for it - so those duplicate fields were removed.
 
 function digits(value, max = 30) {
   return String(value || '').replace(/\D/g, '').slice(0, max)
@@ -443,6 +461,22 @@ function StepTitle({ title, description }) {
     <div className="mb-7">
       <h2 className="text-2xl font-extrabold text-navy sm:text-3xl">{title}</h2>
       <p className="mt-2 leading-7 text-slate-600">{description}</p>
+    </div>
+  )
+}
+
+// Section divider inside a step that gathers several former screens, so a long
+// page still reads as the discrete parts underwriting asks for.
+function SectionTitle({ icon: Icon, title, description, first = false }) {
+  return (
+    <div className={first ? 'mb-6' : 'mt-12 border-t border-slate-200 pt-10 mb-6'}>
+      <div className="flex items-center gap-3">
+        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-mist text-primary">
+          <Icon size={20} />
+        </span>
+        <h3 className="text-xl font-extrabold text-navy">{title}</h3>
+      </div>
+      {description && <p className="mt-2 text-sm leading-6 text-slate-600">{description}</p>}
     </div>
   )
 }
@@ -1062,11 +1096,19 @@ function validate(step, values, selectedSolutions, plans, products, shipments, c
   const errors = {}
   const required = (key, message) => { if (!String(values[key] ?? '').trim()) errors[key] = message }
 
-  if (step === 0 && selectedSolutions.length === 0) {
+  if (step === SCREEN.services && selectedSolutions.length === 0) {
     errors.solutions = 'Please select at least one merchant service to continue.'
   }
 
-  if (step === 1) {
+  if (step === SCREEN.plan) {
+    if (Object.keys(plans).length < selectedSolutions.length) {
+      errors.plan = 'Please select one pricing plan for each requested service.'
+    }
+  }
+
+  // Information gathers what used to be three screens (business, ownership and
+  // financial), so every one of their rules runs together here.
+  if (step === SCREEN.information) {
     ['legalName', 'legalAddress', 'legalZipCode', 'legalCity', 'legalState', 'contactNumber', 'taxType', 'feinNumber', 'ownerShipType', 'businessType', 'email', 'productsDescription'].forEach((key) => required(key, 'This field is required.'))
     if (digits(values.contactNumber, 20).length < 10) errors.contactNumber = 'Enter a valid 10-digit phone number.'
     if (digits(values.legalZipCode, 10).length !== 5) errors.legalZipCode = 'ZIP Code must be exactly 5 digits.'
@@ -1078,18 +1120,14 @@ function validate(step, values, selectedSolutions, plans, products, shipments, c
       ['businessName', 'dbaAddress', 'businessZipCode', 'businessCity', 'businessState', 'dbaPhoneNumber'].forEach((key) => required(key, 'This field is required.'))
       if (digits(values.businessZipCode, 10).length !== 5) errors.businessZipCode = 'DBA ZIP Code must be exactly 5 digits.'
     }
-  }
 
-  if (step === 2) {
     ['ownerFirstName', 'ownerLastName', 'date', 'residentialAddress', 'ownerShipZip', 'ownerShipCity', 'ownerShipState', 'ownerPhoneNumber', 'ownerEmail', 'socialSecurityNumber'].forEach((key) => required(key, 'This field is required.'))
     if (digits(values.ownerPhoneNumber, 20).length < 10) errors.ownerPhoneNumber = 'Enter a valid 10-digit owner phone number.'
     if (digits(values.ownerShipZip, 10).length !== 5) errors.ownerShipZip = 'Residential ZIP Code must be exactly 5 digits.'
     if (digits(values.socialSecurityNumber, 20).length !== 9) errors.socialSecurityNumber = 'Social Security Number must contain exactly 9 digits.'
     if (!values.dLFiles.length) errors.dLFiles = 'Upload a driver license or government-issued ID.'
-  }
 
-  if (step === 3) {
-    ['accountNumber', 'routingNumber'].forEach((key) => required(key, 'This field is required.'))
+    ;['accountNumber', 'routingNumber'].forEach((key) => required(key, 'This field is required.'))
     const cleanRouting = digits(values.routingNumber, 10)
     if (cleanRouting.length !== 9) {
       errors.routingNumber = 'Routing Number must contain exactly 9 digits.'
@@ -1100,33 +1138,11 @@ function validate(step, values, selectedSolutions, plans, products, shipments, c
     }
   }
 
-  if (step === 4) {
-    if (Object.keys(plans).length < selectedSolutions.length) {
-      errors.plan = 'Please select one pricing plan for each requested service.'
-    }
-    // ATM Conditional validation
-    if (selectedSolutions.includes('atm')) {
-      const atmApp = applications.find((a) => a.solution === 'atm')
-      const chosenAtmPlan = (plans[atmApp?.applicationId] || '').toLowerCase()
-      if (chosenAtmPlan.includes('owner') || chosenAtmPlan.includes('placement')) {
-        if (!values.atmInternetPlan) errors.atmInternetPlan = 'Select an internet / data plan for your ATM.'
-      }
-      if (chosenAtmPlan.includes('owner')) {
-        if (!values.atmSurchargeAmount) errors.atmSurchargeAmount = 'Enter the target surcharge amount.'
-        if (!values.atmOwnershipOption) errors.atmOwnershipOption = 'Select your ATM ownership option.'
-        if (!values.atmModel) errors.atmModel = 'Enter your ATM model name.'
-      }
-      if (chosenAtmPlan.includes('placement')) {
-        if (!values.atmEstimatedMonthlyTransactions) errors.atmEstimatedMonthlyTransactions = 'Select estimated monthly ATM transactions.'
-      }
-    }
-  }
-
-  if (step === 5 && Object.values(products).some((selection) => !selection.own && !Object.values(selection.items || {}).some((quantity) => quantity > 0))) {
+  if (step === SCREEN.hardware && Object.values(products).some((selection) => !selection.own && !Object.values(selection.items || {}).some((quantity) => quantity > 0))) {
     errors.products = 'Select hardware items or indicate that you already own compatible hardware for each service.'
   }
 
-  if (step === 7) {
+  if (step === SCREEN.shipment) {
     Object.entries(shipments).forEach(([id, form]) => {
       const isMerchantOwned = form.type === 'MerchantOwned' || products[id]?.own
       if (!isMerchantOwned) {
@@ -1173,7 +1189,7 @@ function validate(step, values, selectedSolutions, plans, products, shipments, c
     })
   }
 
-  if (step === 8) {
+  if (step === SCREEN.submit) {
     const uncheckedApp = applications.find((app) => !checkedByApp[app.applicationId])
     if (uncheckedApp) {
       errors.accepted = `Please agree to the terms and conditions for ${getServiceLabel(uncheckedApp.solution)} before submitting.`
@@ -1227,6 +1243,36 @@ export default function ApplicationFlow({ onComplete }) {
     setErrors((current) => ({ ...current, [key]: '' }))
   }
 
+  // "Owner information is the same as legal information" has to mirror live now
+  // that both sit on the Information screen: the owner fields are on screen
+  // while the legal ones are still being typed. The copy used to run once, on
+  // leaving the old Business screen.
+  useEffect(() => {
+    if (!values.ownerSameAsLegal) return
+    setValues((current) => {
+      if (!current.ownerSameAsLegal) return current
+      const mirrored = {
+        residentialAddress: current.legalAddress,
+        ownerShipZip: current.legalZipCode,
+        ownerShipCity: current.legalCity,
+        ownerShipState: current.legalState,
+        ownerPhoneNumber: current.contactNumber,
+        ownerEmail: current.email,
+      }
+      // Returning the same object lets React bail out instead of re-rendering.
+      const alreadyMirrored = Object.entries(mirrored).every(([key, value]) => current[key] === value)
+      return alreadyMirrored ? current : { ...current, ...mirrored }
+    })
+  }, [
+    values.ownerSameAsLegal,
+    values.legalAddress,
+    values.legalZipCode,
+    values.legalCity,
+    values.legalState,
+    values.contactNumber,
+    values.email,
+  ])
+
   // Load service categories on mount (Sorted: Credit Card and ATM prioritized before POS)
   useEffect(() => {
     const controller = new AbortController()
@@ -1251,25 +1297,26 @@ export default function ApplicationFlow({ onComplete }) {
     return () => controller.abort()
   }, [])
 
-  // Load plans for step 4
+  // Load plans for the Plan screen
   useEffect(() => {
-    if (step !== 4 || catalog.plans.length) return
+    if (step !== SCREEN.plan || catalog.plans.length) return
     applicationRequest('price-plan')
       .then((result) => setCatalog((current) => ({ ...current, plans: unwrapData(result) || [] })))
       .catch((nextError) => setError(nextError.message))
   }, [step, catalog.plans.length])
 
-  // Load hardware for step 5
+  // Load hardware for the Hardware screen
   useEffect(() => {
-    if (step !== 5 || catalog.products.length) return
+    if (step !== SCREEN.hardware || catalog.products.length) return
     applicationRequest('item-services')
       .then((result) => setCatalog((current) => ({ ...current, products: unwrapData(result) || [] })))
       .catch((nextError) => setError(nextError.message))
   }, [step, catalog.products.length])
 
-  // Load preferences for steps 6 and 7
+  // Load preferences: service preferences live on Information, merchant-owned
+  // equipment preferences on Shipment.
   useEffect(() => {
-    if ((step !== 6 && step !== 7) || catalog.preferences.length) return
+    if ((step !== SCREEN.information && step !== SCREEN.shipment) || catalog.preferences.length) return
     applicationRequest('application-preferences')
       .then((result) => setCatalog((current) => ({ ...current, preferences: unwrapData(result) || [] })))
       .catch((nextError) => setError(nextError.message))
@@ -1327,9 +1374,9 @@ export default function ApplicationFlow({ onComplete }) {
     })
   }, [applications, values, products, catalog.products, step])
 
-  // Fetch agreement documents for Step 8
+  // Fetch agreement documents for the Submit screen
   useEffect(() => {
-    if (step !== 8 || !applications.length) return
+    if (step !== SCREEN.submit || !applications.length) return
     let isMounted = true
     setLoadingAgreements(true)
     setError('')
@@ -1416,8 +1463,8 @@ export default function ApplicationFlow({ onComplete }) {
   }
 
   const saveCurrentStep = async () => {
-    if (step === 0) {
-      const result = unwrapData(await saveApplication({ currentStep: 1, solutions, applicationId: null }))
+    if (step === SCREEN.services) {
+      const result = unwrapData(await saveApplication({ currentStep: apiStep(SCREEN.services), solutions, applicationId: null }))
       const raw = result?.applications || []
       const fallback = result?.applicationId || result?.id
       const selectedServices = catalog.services.filter((s) => solutions.includes(s.solution))
@@ -1439,9 +1486,31 @@ export default function ApplicationFlow({ onComplete }) {
       return
     }
 
-    if (step === 1) {
+    if (step === SCREEN.plan) {
+      await Promise.all(
+        applications.map((application) =>
+          saveApplication({
+            currentStep: apiStep(SCREEN.plan),
+            plan: plans[application.applicationId],
+            applicationId: application.applicationId,
+          })
+        )
+      )
+      return
+    }
+
+    if (step === SCREEN.information) {
+      // Business, ownership and financial data now travel in a single step-3
+      // request. That request is what lets the server create the merchant, so
+      // it has to carry every field it needs and must land before the per-
+      // application preference writes below.
+      const [dLFileUrl, bankLetterFileUrl] = await Promise.all([
+        uploadFiles(values.dLFiles, 'applications'),
+        uploadFiles(values.bankFiles, 'application-bank-letter'),
+      ])
+
       await saveApplication({
-        currentStep: 2,
+        currentStep: apiStep(SCREEN.information),
         legalName: values.legalName,
         legalAddress: values.legalAddress,
         legalZipCode: values.legalZipCode,
@@ -1464,15 +1533,7 @@ export default function ApplicationFlow({ onComplete }) {
         website: values.website || undefined,
         productsDescription: values.productsDescription,
         source: 'website',
-        applicationIds,
-      })
-      return
-    }
 
-    if (step === 2) {
-      const dLFileUrl = await uploadFiles(values.dLFiles, 'applications')
-      await saveApplication({
-        currentStep: 3,
         merchantFirstName: values.ownerFirstName,
         merchantLastName: values.ownerLastName,
         ownerFirstName: values.ownerFirstName,
@@ -1486,15 +1547,7 @@ export default function ApplicationFlow({ onComplete }) {
         ownerEmail: values.ownerEmail,
         ownerPhoneNumber: values.ownerPhoneNumber,
         dLFileUrl,
-        applicationIds,
-      })
-      return
-    }
 
-    if (step === 3) {
-      const bankLetterFileUrl = await uploadFiles(values.bankFiles, 'application-bank-letter')
-      await saveApplication({
-        currentStep: 4,
         bankName: values.bankName,
         accountNumber: values.accountNumber,
         routingNumber: values.routingNumber,
@@ -1506,35 +1559,22 @@ export default function ApplicationFlow({ onComplete }) {
         bankLetterFileUrl,
         applicationIds,
       })
-      return
-    }
 
-    if (step === 4) {
-      // Save plan name and ATM preferences
+      // Service preferences are per application, so they cannot ride along with
+      // the shared payload above.
       await Promise.all(
-        applications.map((application) => {
-          const selectedPlan = plans[application.applicationId]
-          const payload = {
-            currentStep: 5,
-            plan: selectedPlan,
+        applications.map((application) =>
+          saveApplication({
+            currentStep: apiStep(SCREEN.information),
+            preferences: preferences[application.applicationId] || {},
             applicationId: application.applicationId,
-          }
-          if (application.solution === 'atm') {
-            payload.atmDetails = {
-              internetPlan: values.atmInternetPlan,
-              surchargeAmount: values.atmSurchargeAmount,
-              ownershipOption: values.atmOwnershipOption,
-              model: values.atmModel,
-              estimatedMonthlyTransactions: values.atmEstimatedMonthlyTransactions,
-            }
-          }
-          return saveApplication(payload)
-        })
+          })
+        )
       )
       return
     }
 
-    if (step === 5) {
+    if (step === SCREEN.hardware) {
       await Promise.all(
         applications.map((application) => {
           const selection = products[application.applicationId] || { own: false, items: {} }
@@ -1553,7 +1593,7 @@ export default function ApplicationFlow({ onComplete }) {
               }
             })
           return saveApplication({
-            currentStep: 6,
+            currentStep: apiStep(SCREEN.hardware),
             hardware,
             hasOwnHardware: selection.own,
             applicationId: application.applicationId,
@@ -1563,20 +1603,7 @@ export default function ApplicationFlow({ onComplete }) {
       return
     }
 
-    if (step === 6) {
-      await Promise.all(
-        applications.map((application) =>
-          saveApplication({
-            currentStep: 7,
-            preferences: preferences[application.applicationId] || {},
-            applicationId: application.applicationId,
-          })
-        )
-      )
-      return
-    }
-
-    if (step === 7) {
+    if (step === SCREEN.shipment) {
       await Promise.all(
         applications.map((application) => {
           const form = shipments[application.applicationId]
@@ -1613,7 +1640,7 @@ export default function ApplicationFlow({ onComplete }) {
           const effectivePaymentType = (!hasInStock && form.paymentType === 'Pay Now') ? 'Pay Later' : form.paymentType
 
           const payload = {
-            currentStep: 8,
+            currentStep: apiStep(SCREEN.shipment),
             paymentMethod: isMerchantOwned
               ? 'merchantowned'
               : effectivePaymentType === 'Lease'
@@ -1808,7 +1835,7 @@ export default function ApplicationFlow({ onComplete }) {
         applications.map((app) => {
           const signatureUrl = uploadedSignatures[app.applicationId]
           return saveApplication({
-            currentStep: 9,
+            currentStep: apiStep(SCREEN.submit),
             agreedTermsAndConditon: true,
             merchantSignatureFileUrl: signatureUrl ? { url: signatureUrl } : undefined,
             status: 'pending',
@@ -1848,7 +1875,7 @@ export default function ApplicationFlow({ onComplete }) {
 
     setLoading(true)
     try {
-      if (step === 8) {
+      if (step === SCREEN.submit) {
         const unsignedApp = applications.find((app) => {
           const isSigned = Boolean(signedByApp[app.applicationId])
           const docs = agreements[app.applicationId] || []
@@ -1868,18 +1895,7 @@ export default function ApplicationFlow({ onComplete }) {
         await submitFinalApplications()
       } else {
         await saveCurrentStep()
-        if (step === 1 && values.ownerSameAsLegal) {
-          setValues((current) => ({
-            ...current,
-            residentialAddress: current.legalAddress,
-            ownerShipZip: current.legalZipCode,
-            ownerShipCity: current.legalCity,
-            ownerShipState: current.legalState,
-            ownerPhoneNumber: current.contactNumber,
-            ownerEmail: current.email,
-          }))
-        }
-        setStep((current) => current + 1)
+        setStep((current) => Math.min(LAST_SCREEN, current + 1))
         setErrors({})
         requestAnimationFrame(() => topRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }))
       }
@@ -1972,7 +1988,7 @@ export default function ApplicationFlow({ onComplete }) {
         )}
 
         {/* Step 0: Services */}
-        {step === 0 && (
+        {step === SCREEN.services && (
           <>
             <StepTitle title="Select your services" description="Choose every service your business needs. A separate linked application will be created for each selection." />
             {errors.solutions && <p tabIndex="-1" data-error="true" className="mb-4 text-sm font-bold text-rose-600">{errors.solutions}</p>}
@@ -2008,10 +2024,88 @@ export default function ApplicationFlow({ onComplete }) {
           </>
         )}
 
-        {/* Step 1: Business Information */}
-        {step === 1 && (
+        {/* Step 1: Plan Selection */}
+        {step === SCREEN.plan && (
           <>
-            <StepTitle title="Business information" description="Tell us about the legal entity and the business location where you operate." />
+            <StepTitle title="Select a plan" description="Choose one available pricing plan for each requested service." />
+            {errors.plan && <p tabIndex="-1" data-error="true" className="mb-4 font-bold text-rose-600">{errors.plan}</p>}
+            <div className="space-y-8">
+              {applications.map((application) => {
+                const available = catalog.plans.filter(
+                  (plan) => String(plan.service).toLowerCase() === application.solution.toLowerCase()
+                )
+                const currentPlan = plans[application.applicationId]
+
+                return (
+                  <section key={application.applicationId} className="rounded-2xl border border-slate-200 p-5 sm:p-6">
+                    <h3 className="mb-4 text-lg font-extrabold capitalize text-navy">
+                      {getServiceLabel(application.solution)}
+                    </h3>
+                    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                      {available.map((plan) => {
+                        const isSelected = currentPlan === plan.name
+                        const details = getPlanDetails(plan)
+                        const PlanIcon = details.Icon
+
+                        return (
+                          <button
+                            type="button"
+                            key={plan.id}
+                            onClick={() => setPlans((current) => ({ ...current, [application.applicationId]: plan.name }))}
+                            className={`group relative flex flex-col justify-between rounded-2xl border p-5 sm:p-6 text-center transition ${isSelected ? 'border-primary bg-mist shadow-md' : 'border-slate-200 bg-white hover:border-primary/50 hover:shadow-sm'}`}
+                          >
+                            <span className={`absolute right-3.5 top-3.5 flex h-5 w-5 items-center justify-center rounded-full border transition ${isSelected ? 'border-primary bg-primary text-white' : 'border-slate-300 bg-white'}`}>
+                              {isSelected && <Check size={12} />}
+                            </span>
+
+                            <div className="flex flex-col items-center">
+                              <span className={`flex h-12 w-12 items-center justify-center rounded-xl transition ${isSelected ? 'bg-primary text-white' : 'bg-mist text-primary group-hover:bg-primary group-hover:text-white'}`}>
+                                <PlanIcon size={24} />
+                              </span>
+                              <strong className="mt-3.5 text-base font-extrabold text-navy">{details.title}</strong>
+                              {details.rate && (
+                                <p className="mt-1 text-base font-black text-primary">
+                                  {details.rate}
+                                </p>
+                              )}
+                              <p className="mt-2 text-xs leading-relaxed text-slate-600">
+                                {details.desc}
+                              </p>
+                            </div>
+
+                            {details.feeNote && (
+                              <p className="mt-3 border-t border-slate-100 pt-2 text-[11px] font-semibold text-slate-400">
+                                {details.feeNote}
+                              </p>
+                            )}
+                          </button>
+                        )
+                      })}
+                      {!available.length && (
+                        <p className="col-span-full rounded-xl bg-mist p-4 text-sm font-semibold text-primary-dark">
+                          No plans are currently configured for this service. Standard rates apply.
+                        </p>
+                      )}
+                    </div>
+                  </section>
+                )
+              })}
+            </div>
+
+            {/* General Fee Explanation Disclosure for all plans */}
+            <div className="mt-6 rounded-2xl border border-primary/20 bg-slate-50/80 p-4 sm:p-5 text-xs leading-relaxed text-slate-600">
+              <p>
+                <strong className="text-navy">*DMS Monthly Fee</strong> refers to the Dolphin Merchant Service Monthly Fee, which includes PCI compliance support, gateway connectivity, and customer service.
+              </p>
+            </div>
+          </>
+        )}
+
+        {/* Step 2: Information (business, ownership, financial and preferences) */}
+        {step === SCREEN.information && (
+          <>
+            <StepTitle title="Your information" description="Everything underwriting needs to open your account: the legal entity, the principal owner, the settlement account, and your service preferences." />
+            <SectionTitle first icon={Building2} title="Business information" description="Tell us about the legal entity and the business location where you operate." />
             <h3 className="mb-4 text-lg font-extrabold text-navy">Legal information</h3>
             <div className="grid gap-5 sm:grid-cols-2">
               <Field id="legalName" label="Legal Business Name" required value={values.legalName} onChange={(event) => change('legalName', event.target.value)} error={errors.legalName} />
@@ -2066,13 +2160,8 @@ export default function ApplicationFlow({ onComplete }) {
               <Field id="website" label="Website URL" type="url" placeholder="https://" value={values.website} onChange={(event) => change('website', event.target.value)} />
               <Field id="productsDescription" label="Products / Services Description" required value={values.productsDescription} onChange={(event) => change('productsDescription', event.target.value)} error={errors.productsDescription} tooltip="Brief explanation of what goods or services your business sells." />
             </div>
-          </>
-        )}
 
-        {/* Step 2: Ownership Information */}
-        {step === 2 && (
-          <>
-            <StepTitle title="Ownership information" description="Provide details for the primary owner or authorized principal." />
+            <SectionTitle icon={UserRound} title="Ownership information" description="Provide details for the primary owner or authorized principal." />
             <div className="grid gap-5 sm:grid-cols-2">
               <Field id="ownerFirstName" label="Owner First Name" required value={values.ownerFirstName} onChange={(event) => change('ownerFirstName', event.target.value)} error={errors.ownerFirstName} />
               <Field id="ownerLastName" label="Owner Last Name" required value={values.ownerLastName} onChange={(event) => change('ownerLastName', event.target.value)} error={errors.ownerLastName} />
@@ -2094,21 +2183,7 @@ export default function ApplicationFlow({ onComplete }) {
               <input
                 type="checkbox"
                 checked={values.ownerSameAsLegal}
-                onChange={(event) => {
-                  const checked = event.target.checked
-                  change('ownerSameAsLegal', checked)
-                  if (checked) {
-                    setValues((current) => ({
-                      ...current,
-                      residentialAddress: current.legalAddress,
-                      ownerShipZip: current.legalZipCode,
-                      ownerShipCity: current.legalCity,
-                      ownerShipState: current.legalState,
-                      ownerPhoneNumber: current.contactNumber,
-                      ownerEmail: current.email,
-                    }))
-                  }
-                }}
+                onChange={(event) => change('ownerSameAsLegal', event.target.checked)}
                 className="h-5 w-5 accent-primary"
               />
               Owner information is the same as legal information
@@ -2132,13 +2207,8 @@ export default function ApplicationFlow({ onComplete }) {
                 />
               </Field>
             </div>
-          </>
-        )}
 
-        {/* Step 3: Financial Information */}
-        {step === 3 && (
-          <>
-            <StepTitle title="Financial information" description="Enter the settlement account and expected processing figures." />
+            <SectionTitle icon={Landmark} title="Financial information" description="Enter the settlement account and expected processing figures." />
             <div className="grid gap-5 sm:grid-cols-2">
               <Field id="bankName" label="Bank Name" value={values.bankName} onChange={(event) => change('bankName', event.target.value)} placeholder="e.g. Chase, Bank of America" />
               <MaskedField
@@ -2193,181 +2263,74 @@ export default function ApplicationFlow({ onComplete }) {
                 <Field id="comment" label="Comments / Notes" value={values.comment} onChange={(event) => change('comment', event.target.value)} placeholder="Any special instructions or underwriting notes" />
               </div>
             </div>
-          </>
-        )}
 
-        {/* Step 4: Plan Selection */}
-        {step === 4 && (
-          <>
-            <StepTitle title="Select a plan" description="Choose one available pricing plan for each requested service." />
-            {errors.plan && <p tabIndex="-1" data-error="true" className="mb-4 font-bold text-rose-600">{errors.plan}</p>}
-            <div className="space-y-8">
+            <SectionTitle icon={FileCheck2} title="Application preferences" description="Configure service-specific preferences supplied by our application system." />
+            <div className="space-y-9">
               {applications.map((application) => {
-                const available = catalog.plans.filter(
-                  (plan) => String(plan.service).toLowerCase() === application.solution.toLowerCase()
-                )
-                const currentPlan = plans[application.applicationId]
-                const normalizedCurrentPlan = (currentPlan || '').toLowerCase()
-
+                const definitions = catalog.preferences
+                  .filter((item) => item.formName === preferenceForms[application.solution])
+                  .sort((a, b) => Number(a.order || 0) - Number(b.order || 0))
+                const appValues = preferences[application.applicationId] || {}
                 return (
                   <section key={application.applicationId} className="rounded-2xl border border-slate-200 p-5 sm:p-6">
-                    <h3 className="mb-4 text-lg font-extrabold capitalize text-navy">
-                      {getServiceLabel(application.solution)}
-                    </h3>
-                    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                      {available.map((plan) => {
-                        const isSelected = currentPlan === plan.name
-                        const details = getPlanDetails(plan)
-                        const PlanIcon = details.Icon
-
+                    <h3 className="mb-4 text-lg font-extrabold capitalize text-navy">{getServiceLabel(application.solution)}</h3>
+                    <div className="grid gap-5 sm:grid-cols-2">
+                      {definitions.map((definition) => {
+                        const setValue = (value) => setPreferences((current) => ({
+                          ...current,
+                          [application.applicationId]: { ...appValues, [definition.name]: value },
+                        }))
+                        if (definition.preference === 'switch') {
+                          return (
+                            <label key={definition.name} className="flex items-center gap-3 rounded-xl border border-slate-200 p-4 font-bold text-navy">
+                              <input
+                                type="checkbox"
+                                checked={Boolean(appValues[definition.name])}
+                                onChange={(event) => setValue(event.target.checked)}
+                                className="h-5 w-5 accent-primary"
+                              />
+                              {definition.name}
+                            </label>
+                          )
+                        }
+                        if (definition.preference === 'dropdown') {
+                          return (
+                            <SelectField
+                              key={definition.name}
+                              id={`pref-${application.applicationId}-${definition.order}`}
+                              label={definition.name}
+                              value={appValues[definition.name] || ''}
+                              onChange={(event) => setValue(event.target.value)}
+                              options={getPreferenceOptions(definition.extra)}
+                            />
+                          )
+                        }
                         return (
-                          <button
-                            type="button"
-                            key={plan.id}
-                            onClick={() => setPlans((current) => ({ ...current, [application.applicationId]: plan.name }))}
-                            className={`group relative flex flex-col justify-between rounded-2xl border p-5 sm:p-6 text-center transition ${isSelected ? 'border-primary bg-mist shadow-md' : 'border-slate-200 bg-white hover:border-primary/50 hover:shadow-sm'}`}
-                          >
-                            <span className={`absolute right-3.5 top-3.5 flex h-5 w-5 items-center justify-center rounded-full border transition ${isSelected ? 'border-primary bg-primary text-white' : 'border-slate-300 bg-white'}`}>
-                              {isSelected && <Check size={12} />}
-                            </span>
-
-                            <div className="flex flex-col items-center">
-                              <span className={`flex h-12 w-12 items-center justify-center rounded-xl transition ${isSelected ? 'bg-primary text-white' : 'bg-mist text-primary group-hover:bg-primary group-hover:text-white'}`}>
-                                <PlanIcon size={24} />
-                              </span>
-                              <strong className="mt-3.5 text-base font-extrabold text-navy">{details.title}</strong>
-                              {details.rate && (
-                                <p className="mt-1 text-base font-black text-primary">
-                                  {details.rate}
-                                </p>
-                              )}
-                              <p className="mt-2 text-xs leading-relaxed text-slate-600">
-                                {details.desc}
-                              </p>
-                            </div>
-
-                            {details.feeNote && (
-                              <p className="mt-3 border-t border-slate-100 pt-2 text-[11px] font-semibold text-slate-400">
-                                {details.feeNote}
-                              </p>
-                            )}
-                          </button>
+                          <Field
+                            key={definition.name}
+                            id={`pref-${application.applicationId}-${definition.order}`}
+                            label={definition.name}
+                            type={definition.preference === 'datePicker' ? 'date' : definition.preference === 'timePicker' ? 'time' : 'text'}
+                            value={appValues[definition.name] || ''}
+                            onChange={(event) => setValue(event.target.value)}
+                          />
                         )
                       })}
-                      {!available.length && (
-                        <p className="col-span-full rounded-xl bg-mist p-4 text-sm font-semibold text-primary-dark">
-                          No plans are currently configured for this service. Standard rates apply.
+                      {!definitions.length && (
+                        <p className="col-span-full rounded-xl bg-mist p-4 text-sm font-semibold text-slate-600">
+                          No additional configuration needed for this service.
                         </p>
                       )}
                     </div>
-
-                    {/* ATM Plan Conditional Flow */}
-                    {application.solution === 'atm' && (normalizedCurrentPlan.includes('owner') || normalizedCurrentPlan.includes('placement')) && (
-                      <div className="mt-8 rounded-2xl border border-primary/20 bg-slate-50/70 p-5 sm:p-6 space-y-5">
-                        <div className="flex items-center gap-2">
-                          <Banknote size={20} className="text-primary" />
-                          <h4 className="text-base font-extrabold text-navy">
-                            ATM Configuration & Requirements ({normalizedCurrentPlan.includes('owner') ? 'Ownership' : 'Placement'})
-                          </h4>
-                        </div>
-
-                        <div className="grid gap-5 sm:grid-cols-2">
-                          <SelectField
-                            id="atmInternetPlan"
-                            label="Internet / Data Plan"
-                            required
-                            value={values.atmInternetPlan}
-                            onChange={(e) => change('atmInternetPlan', e.target.value)}
-                            options={[
-                              'Wireless Cellular Data ($15/month)',
-                              'Merchant High-Speed Internet (Free)',
-                              'Standard Phone Line',
-                            ]}
-                            error={errors.atmInternetPlan}
-                            tooltip="Connectivity method required for ATM transaction authorization."
-                          />
-
-                          {normalizedCurrentPlan.includes('owner') && (
-                            <>
-                              <Field
-                                id="atmSurchargeAmount"
-                                label="Surcharge Amount ($)"
-                                required
-                                value={values.atmSurchargeAmount}
-                                onChange={(e) => change('atmSurchargeAmount', e.target.value)}
-                                placeholder="3.00"
-                                error={errors.atmSurchargeAmount}
-                                tooltip="Fee charged to ATM cardholders per cash withdrawal."
-                              />
-                              <SelectField
-                                id="atmOwnershipOption"
-                                label="ATM Ownership Option"
-                                required
-                                value={values.atmOwnershipOption}
-                                onChange={(e) => change('atmOwnershipOption', e.target.value)}
-                                options={[
-                                  'Buy New ATM from Dolphin',
-                                  'Use Existing ATM Machine',
-                                  'Rent to Own Program',
-                                ]}
-                                error={errors.atmOwnershipOption}
-                                tooltip="Method of ATM machine procurement."
-                              />
-                              <SelectField
-                                id="atmModel"
-                                label="ATM Model"
-                                required
-                                value={values.atmModel}
-                                onChange={(e) => change('atmModel', e.target.value)}
-                                options={[
-                                  'Hyosung Halo II',
-                                  'Genmega G2500',
-                                  'Hantle 1700W',
-                                  'Genmega Onyx',
-                                  'Other Approved Model',
-                                ]}
-                                error={errors.atmModel}
-                                tooltip="ATM hardware manufacturer and model designation."
-                              />
-                            </>
-                          )}
-
-                          {normalizedCurrentPlan.includes('placement') && (
-                            <SelectField
-                              id="atmEstimatedMonthlyTransactions"
-                              label="Estimated Monthly ATM Transactions"
-                              required
-                              value={values.atmEstimatedMonthlyTransactions}
-                              onChange={(e) => change('atmEstimatedMonthlyTransactions', e.target.value)}
-                              options={[
-                                '100 - 250 transactions/mo',
-                                '250 - 500 transactions/mo',
-                                '500 - 1000 transactions/mo',
-                                '1000+ transactions/mo',
-                              ]}
-                              error={errors.atmEstimatedMonthlyTransactions}
-                              tooltip="Estimated foot traffic withdrawals for placement program qualification."
-                            />
-                          )}
-                        </div>
-                      </div>
-                    )}
                   </section>
                 )
               })}
             </div>
-
-            {/* General Fee Explanation Disclosure for all plans */}
-            <div className="mt-6 rounded-2xl border border-primary/20 bg-slate-50/80 p-4 sm:p-5 text-xs leading-relaxed text-slate-600">
-              <p>
-                <strong className="text-navy">*DMS Monthly Fee</strong> refers to the Dolphin Merchant Service Monthly Fee, which includes PCI compliance support, gateway connectivity, and customer service.
-              </p>
-            </div>
           </>
         )}
 
-        {/* Step 5: Hardware Selection */}
-        {step === 5 && (
+        {/* Step 3: Hardware Selection */}
+        {step === SCREEN.hardware && (
           <>
             <StepTitle title="Hardware and equipment" description="Select the products you need, or tell us you already have compatible hardware." />
             {errors.products && <p tabIndex="-1" data-error="true" className="mb-4 font-bold text-rose-600">{errors.products}</p>}
@@ -2489,78 +2452,10 @@ export default function ApplicationFlow({ onComplete }) {
           </>
         )}
 
-        {/* Step 6: Preferences */}
-        {step === 6 && (
+        {/* Step 4: Shipment and Payment (Auto Pre-filled) */}
+        {step === SCREEN.shipment && (
           <>
-            <StepTitle title="Application preferences" description="Configure service-specific preferences supplied by our application system." />
-            <div className="space-y-9">
-              {applications.map((application) => {
-                const definitions = catalog.preferences
-                  .filter((item) => item.formName === preferenceForms[application.solution])
-                  .sort((a, b) => Number(a.order || 0) - Number(b.order || 0))
-                const appValues = preferences[application.applicationId] || {}
-                return (
-                  <section key={application.applicationId} className="rounded-2xl border border-slate-200 p-5 sm:p-6">
-                    <h3 className="mb-4 text-lg font-extrabold capitalize text-navy">{getServiceLabel(application.solution)}</h3>
-                    <div className="grid gap-5 sm:grid-cols-2">
-                      {definitions.map((definition) => {
-                        const setValue = (value) => setPreferences((current) => ({
-                          ...current,
-                          [application.applicationId]: { ...appValues, [definition.name]: value },
-                        }))
-                        if (definition.preference === 'switch') {
-                          return (
-                            <label key={definition.name} className="flex items-center gap-3 rounded-xl border border-slate-200 p-4 font-bold text-navy">
-                              <input
-                                type="checkbox"
-                                checked={Boolean(appValues[definition.name])}
-                                onChange={(event) => setValue(event.target.checked)}
-                                className="h-5 w-5 accent-primary"
-                              />
-                              {definition.name}
-                            </label>
-                          )
-                        }
-                        if (definition.preference === 'dropdown') {
-                          return (
-                            <SelectField
-                              key={definition.name}
-                              id={`pref-${application.applicationId}-${definition.order}`}
-                              label={definition.name}
-                              value={appValues[definition.name] || ''}
-                              onChange={(event) => setValue(event.target.value)}
-                              options={getPreferenceOptions(definition.extra)}
-                            />
-                          )
-                        }
-                        return (
-                          <Field
-                            key={definition.name}
-                            id={`pref-${application.applicationId}-${definition.order}`}
-                            label={definition.name}
-                            type={definition.preference === 'datePicker' ? 'date' : definition.preference === 'timePicker' ? 'time' : 'text'}
-                            value={appValues[definition.name] || ''}
-                            onChange={(event) => setValue(event.target.value)}
-                          />
-                        )
-                      })}
-                      {!definitions.length && (
-                        <p className="col-span-full rounded-xl bg-mist p-4 text-sm font-semibold text-slate-600">
-                          No additional configuration needed for this service.
-                        </p>
-                      )}
-                    </div>
-                  </section>
-                )
-              })}
-            </div>
-          </>
-        )}
-
-        {/* Step 7: Delivery & Payment (Auto Pre-filled) */}
-        {step === 7 && (
-          <>
-            <StepTitle title="Delivery and payment" description="Choose how each equipment order should be fulfilled and paid." />
+            <StepTitle title="Shipment and payment" description="Choose how each equipment order should be fulfilled and paid." />
             <div className="space-y-10">
               {applications.map((application) => {
                 const form = shipments[application.applicationId]
@@ -2778,8 +2673,8 @@ export default function ApplicationFlow({ onComplete }) {
           </>
         )}
 
-        {/* Step 8: Submit & Agreements */}
-        {step === 8 && (
+        {/* Step 5: Submit & Agreements */}
+        {step === SCREEN.submit && (
           <>
             <StepTitle title="Review agreements and submit" description="Review the generated agreements, sign electronically, and authorize your application." />
 
@@ -2921,7 +2816,7 @@ export default function ApplicationFlow({ onComplete }) {
           >
             {loading ? (
               <><LoaderCircle className="animate-spin" size={18} /> Saving...</>
-            ) : step === 8 ? (
+            ) : step === SCREEN.submit ? (
               <>Submit Application <CheckCircle2 size={18} /></>
             ) : (
               <>Save and Continue <ArrowRight size={18} /></>

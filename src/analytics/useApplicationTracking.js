@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react'
-import { stepLabel } from './config'
+import { APPLICATION_STEP_COUNT, stepLabel } from './config'
 import { identifyLead, track } from './client'
 import { wasApplicationSubmitted } from './applicationState'
 
@@ -52,7 +52,7 @@ export default function useApplicationTracking({ step, values, errors, applicati
     track('application_step_viewed', {
       step_name: stepLabel(step),
       step_index: step + 1,
-      total_steps: 9,
+      total_steps: APPLICATION_STEP_COUNT,
     })
   }, [step])
 
@@ -78,9 +78,9 @@ export default function useApplicationTracking({ step, values, errors, applicati
 
   // Attach contact details so an abandoned application can be followed up.
   //
-  // These arrive across several steps: the email on Business, the owner's name
-  // two steps later. Identifying only once would permanently miss whatever had
-  // not been typed yet, so this re-sends whenever the details actually change -
+  // These arrive as the Information step is filled in, business details first
+  // and the owner's further down. Identifying only once would permanently miss
+  // whatever had not been typed yet, so this re-sends whenever they change -
   // compared by value, not by object identity, since `values` is replaced on
   // every keystroke. Only allowlisted fields survive sanitizePerson.
   useEffect(() => {
