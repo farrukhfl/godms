@@ -14,7 +14,7 @@ const MIN_ABANDON_SECONDS = 2
  * back into it, so no validation, save or submit path is affected. Deleting
  * this hook leaves the application behaving identically.
  */
-export default function useApplicationTracking({ step, values, errors, applicationIds }) {
+export default function useApplicationTracking({ step, values, errors, applicationIds, error, solutions, plans }) {
   const enteredAt = useRef(Date.now())
   const mountedAt = useRef(Date.now())
   const furthestStep = useRef(0)
@@ -23,6 +23,9 @@ export default function useApplicationTracking({ step, values, errors, applicati
   const abandonSent = useRef(false)
   const identified = useRef('')
   const lastErrorSignature = useRef('')
+  const lastFailure = useRef('')
+  const lastSolutions = useRef('')
+  const lastPlans = useRef('')
 
   // Mirror of the latest state, so the unload handler can report current
   // position without re-registering its listeners on every keystroke.
@@ -33,7 +36,11 @@ export default function useApplicationTracking({ step, values, errors, applicati
   useEffect(() => {
     if (!started.current) {
       started.current = true
-      track('application_started', { step_name: stepLabel(step), step_index: step + 1 })
+      track('application_started', {
+        step_name: stepLabel(step),
+        step_index: step + 1,
+        total_steps: APPLICATION_STEP_COUNT,
+      })
     }
 
     const previous = previousStep.current
@@ -41,6 +48,7 @@ export default function useApplicationTracking({ step, values, errors, applicati
       track(step > previous ? 'application_step_completed' : 'application_step_back', {
         step_name: stepLabel(previous),
         step_index: previous + 1,
+        total_steps: APPLICATION_STEP_COUNT,
         seconds_spent: Math.round((Date.now() - enteredAt.current) / 1000),
       })
     }
@@ -71,10 +79,51 @@ export default function useApplicationTracking({ step, values, errors, applicati
     track('application_step_error', {
       step_name: stepLabel(step),
       step_index: step + 1,
+      total_steps: APPLICATION_STEP_COUNT,
       error_count: failed.length,
       fields: failed,
     })
   }, [errors, step])
+
+  // Request failures, read from the error banner the flow already renders.
+  //
+  // Without this, a merchant blocked by a failing save looks identical to one
+  // who changed their mind. Separating the two turns a drop in completions into
+  // something that can be acted on, rather than guessed at.
+  useEffect(() => {
+    const message = String(error || '').trim()
+    if (!message || message === lastFailure.current) return
+    lastFailure.current = message
+
+    track('application_failure', {
+      step_name: stepLabel(step),
+      step_index: step + 1,
+      total_steps: APPLICATION_STEP_COUNT,
+      message,
+    })
+  }, [error, step])
+
+  // What the applicant is asking for. Business mix rather than behaviour, and
+  // the reason a step-level funnel alone cannot answer "what do people want".
+  useEffect(() => {
+    const list = Array.isArray(solutions) ? [...solutions].sort() : []
+    if (!list.length) return
+    const signature = list.join(',')
+    if (signature === lastSolutions.current) return
+    lastSolutions.current = signature
+
+    track('application_services_selected', { services: list, service_count: list.length })
+  }, [solutions])
+
+  useEffect(() => {
+    const chosen = Object.values(plans || {}).filter(Boolean).sort()
+    if (!chosen.length) return
+    const signature = chosen.join(',')
+    if (signature === lastPlans.current) return
+    lastPlans.current = signature
+
+    track('application_plan_selected', { plans: chosen })
+  }, [plans])
 
   // Attach contact details so an abandoned application can be followed up.
   //
@@ -111,16 +160,22 @@ export default function useApplicationTracking({ step, values, errors, applicati
       if (Date.now() - mountedAt.current < MIN_ABANDON_SECONDS * 1000) return
       abandonSent.current = true
 
-      track('application_abandoned', {
-        reason,
-        step_name: stepLabel(snapshot.current.step),
-        step_index: snapshot.current.step + 1,
-        furthest_step_name: stepLabel(furthestStep.current),
-        furthest_step_index: furthestStep.current + 1,
-        seconds_on_step: Math.round((Date.now() - enteredAt.current) / 1000),
-        seconds_in_application: Math.round((Date.now() - mountedAt.current) / 1000),
-        has_saved_application: (snapshot.current.applicationIds || []).length > 0,
-      })
+      track(
+        'application_abandoned',
+        {
+          reason,
+          step_name: stepLabel(snapshot.current.step),
+          step_index: snapshot.current.step + 1,
+          total_steps: APPLICATION_STEP_COUNT,
+          furthest_step_name: stepLabel(furthestStep.current),
+          furthest_step_index: furthestStep.current + 1,
+          seconds_on_step: Math.round((Date.now() - enteredAt.current) / 1000),
+          seconds_in_application: Math.round((Date.now() - mountedAt.current) / 1000),
+          has_saved_application: (snapshot.current.applicationIds || []).length > 0,
+        },
+        // The tab may be closing, so this must go out by beacon or not at all.
+        { beacon: true },
+      )
     }
 
     // `pagehide` is the dependable close/navigate signal; `beforeunload`

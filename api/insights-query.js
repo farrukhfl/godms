@@ -22,6 +22,69 @@ const PASSWORD = process.env.INSIGHTS_PASSWORD
 
 const since = (days) => `timestamp > now() - INTERVAL ${days} DAY`
 
+// The application has been restructured before, and step numbers were reused
+// for entirely different steps: step 2 was Business, now it is Plan. Grouping by
+// step number alone stacks two different forms into one chart and invents rows
+// for steps that no longer exist, which is worse than showing nothing.
+//
+// `total_steps` on application_step_viewed identifies the structure in use, and
+// the current one is simply whichever was seen most recently - so this keeps
+// working after the next restructure with nothing to remember.
+const CURRENT_TOTAL_STEPS = `(
+  SELECT argMax(toInt(properties.total_steps), timestamp) FROM events
+  WHERE event = 'application_step_viewed' AND isNotNull(properties.total_steps)
+)`
+
+// Matching on the number *and* name together is what makes this retroactive:
+// events recorded before total_steps was stamped on them are still placed
+// correctly, and names shared between versions ('Submit') cannot cross over.
+const CURRENT_FLOW_STEPS = `
+  SELECT
+    toInt(properties.step_index) AS step_index,
+    toString(properties.step_name) AS step_name
+  FROM events
+  WHERE event = 'application_step_viewed'
+    AND toInt(properties.total_steps) = ${CURRENT_TOTAL_STEPS}
+  GROUP BY step_index, step_name`
+
+const inCurrentFlow = `(toInt(properties.step_index), toString(properties.step_name)) IN (${CURRENT_FLOW_STEPS})`
+
+// How long an application must be untouched before it counts as abandoned
+// rather than still in progress. Someone mid-form who steps away for coffee
+// should not appear in a follow-up list.
+const IDLE_MINUTES = 30
+
+// Abandonment is derived, not captured.
+//
+// Any event fired as a page dies is unreliable: a crash, a flat battery, a
+// force-quit or a dropped connection sends nothing at all, and browsers cancel
+// in-flight requests during unload. Step views, by contrast, are recorded while
+// the page is alive and healthy.
+//
+// So an abandoned application is defined as a person who reached a step, never
+// submitted, and has not been seen since. Nothing can be missed, because the
+// evidence was already collected before they left.
+// `currentFlowOnly` is for the step-shaped chart of where people give up:
+// a step number means nothing across two different structures of the form.
+// Person-level figures leave it off on purpose, because someone who abandoned
+// an older version of the form is still a real lost lead worth calling.
+const abandonedPeople = (days, { currentFlowOnly = false } = {}) => `
+  SELECT
+    person_id,
+    max(toInt(properties.step_index)) AS furthest_step,
+    argMax(properties.step_name, toInt(properties.step_index)) AS furthest_step_name,
+    min(timestamp) AS first_seen,
+    max(timestamp) AS last_seen
+  FROM events
+  WHERE event = 'application_step_viewed' AND ${since(days)}
+    ${currentFlowOnly ? `AND ${inCurrentFlow}` : ''}
+  GROUP BY person_id
+  HAVING last_seen < now() - INTERVAL ${IDLE_MINUTES} MINUTE
+    AND person_id NOT IN (
+      SELECT person_id FROM events
+      WHERE event = 'application_submitted' AND ${since(days)}
+    )`
+
 /**
  * Constant-time password comparison.
  *
@@ -89,11 +152,28 @@ const QUERIES = {
       uniq(properties.$session_id) AS sessions,
       countIf(event = 'form_started') AS form_starts,
       countIf(event = 'form_submitted') AS form_submits,
-      countIf(event = 'form_abandoned') AS form_abandons,
-      countIf(event = 'application_started') AS app_starts,
-      countIf(event = 'application_submitted') AS app_submits,
-      countIf(event = 'application_abandoned') AS app_abandons
+      countIf(event = 'form_abandoned') AS form_abandons
     FROM events WHERE ${since(d)}`,
+
+  // Application totals, counted per person rather than per event, with
+  // abandonment derived from inactivity instead of a departure signal.
+  application_summary: (d) => `
+    SELECT
+      (SELECT uniq(person_id) FROM events
+        WHERE event = 'application_step_viewed' AND ${since(d)}) AS started,
+      (SELECT uniq(person_id) FROM events
+        WHERE event = 'application_submitted' AND ${since(d)}) AS submitted,
+      (SELECT count() FROM (${abandonedPeople(d)})) AS abandoned,
+      (SELECT count() FROM (
+        SELECT person_id, max(timestamp) AS last_seen
+        FROM events WHERE event = 'application_step_viewed' AND ${since(d)}
+        GROUP BY person_id
+        HAVING last_seen >= now() - INTERVAL ${IDLE_MINUTES} MINUTE
+          AND person_id NOT IN (
+            SELECT person_id FROM events
+            WHERE event = 'application_submitted' AND ${since(d)}
+          )
+      )) AS in_progress`,
 
   daily_trend: (d) => `
     SELECT toDate(timestamp) AS day,
@@ -148,27 +228,136 @@ const QUERIES = {
     FROM events WHERE event = '$pageview' AND ${since(d)}
     GROUP BY country ORDER BY visitors DESC LIMIT 15`,
 
-  // One row per application step: how many reached it, how many moved on.
+  // One row per application step: how many people reached it.
+  //
+  // Step views alone are enough - how many moved on is simply how many reached
+  // the next step, which the funnel derives. Reading one event type also lets
+  // this filter on total_steps directly instead of the step-pair match, which
+  // is the difference between a query that returns and one that times out.
   application_funnel: (d) => `
     SELECT
       toInt(properties.step_index) AS step_index,
       any(properties.step_name) AS step_name,
-      uniqIf(distinct_id, event = 'application_step_viewed') AS reached,
-      uniqIf(distinct_id, event = 'application_step_completed') AS completed
+      uniq(person_id) AS reached
     FROM events
-    WHERE event IN ('application_step_viewed', 'application_step_completed')
-      AND ${since(d)}
+    WHERE event = 'application_step_viewed' AND ${since(d)}
+      AND toInt(properties.total_steps) = ${CURRENT_TOTAL_STEPS}
     GROUP BY step_index ORDER BY step_index`,
 
-  // Where people give up, by the furthest step they reached before leaving.
+  // Where people give up, by the furthest step they reached.
   application_dropoff: (d) => `
     SELECT
-      toInt(properties.furthest_step_index) AS step_index,
-      any(properties.furthest_step_name) AS step_name,
+      furthest_step AS step_index,
+      furthest_step_name AS step_name,
       count() AS abandons,
-      round(avg(toFloat(properties.seconds_in_application))) AS avg_seconds
-    FROM events WHERE event = 'application_abandoned' AND ${since(d)}
-    GROUP BY step_index ORDER BY abandons DESC`,
+      round(avg(dateDiff('second', first_seen, last_seen))) AS avg_seconds
+    FROM (${abandonedPeople(d, { currentFlowOnly: true })})
+    GROUP BY step_index, step_name
+    ORDER BY abandons DESC`,
+
+  // How long each step actually takes. A step that is slow is a step that is
+  // hard, and the funnel alone cannot tell the difference.
+  application_step_timing: (d) => `
+    SELECT
+      toInt(properties.step_index) AS step_index,
+      any(properties.step_name) AS step_name,
+      round(avg(toFloat(properties.seconds_spent))) AS avg_seconds,
+      round(median(toFloat(properties.seconds_spent))) AS median_seconds,
+      round(max(toFloat(properties.seconds_spent))) AS slowest_seconds,
+      count() AS completions
+    FROM events
+    WHERE event = 'application_step_completed' AND ${since(d)}
+      AND ${inCurrentFlow}
+      AND toFloat(properties.seconds_spent) > 0
+    GROUP BY step_index ORDER BY step_index`,
+
+  // The individual fields people get wrong, not just the step they were on.
+  // Array properties arrive as nullable JSON strings, hence the unwrapping.
+  application_error_fields: (d) => `
+    SELECT
+      replaceAll(arrayJoin(JSONExtractArrayRaw(coalesce(toString(properties.fields), '[]'))), '"', '') AS field,
+      any(properties.step_name) AS step_name,
+      count() AS failures,
+      uniq(person_id) AS people
+    FROM events WHERE event = 'application_step_error' AND ${since(d)}
+      AND ${inCurrentFlow}
+    GROUP BY field ORDER BY failures DESC LIMIT 25`,
+
+  // Going back means something earlier was unclear or entered wrongly.
+  application_back_steps: (d) => `
+    SELECT
+      toInt(properties.step_index) AS step_index,
+      any(properties.step_name) AS step_name,
+      count() AS times_back,
+      uniq(person_id) AS people
+    FROM events WHERE event = 'application_step_back' AND ${since(d)}
+      AND ${inCurrentFlow}
+    GROUP BY step_index ORDER BY times_back DESC`,
+
+  // Completion split by device. A multi-step form with document uploads behaves
+  // very differently on a phone, and an averaged funnel hides that entirely.
+  //
+  // Deliberately free of step numbers: it reports how far people got and
+  // whether they finished, so restructuring the flow cannot silently break it.
+  funnel_by_device: (d) => `
+    SELECT
+      device,
+      count() AS started,
+      round(avg(furthest_step), 1) AS avg_step_reached,
+      countIf(has_submitted) AS completed
+    FROM (
+      SELECT
+        person_id,
+        argMax(coalesce(nullIf(properties.$device_type, ''), 'Unknown'), timestamp) AS device,
+        max(toInt(properties.step_index)) AS furthest_step,
+        person_id IN (
+          SELECT person_id FROM events
+          WHERE event = 'application_submitted' AND ${since(d)}
+        ) AS has_submitted
+      FROM events
+      WHERE event = 'application_step_viewed' AND ${since(d)}
+      GROUP BY person_id
+    )
+    GROUP BY device ORDER BY started DESC`,
+
+  // Requests that failed on the applicant. These are outages, not indecision.
+  application_failures: (d) => `
+    SELECT
+      any(properties.step_name) AS step_name,
+      toInt(properties.step_index) AS step_index,
+      properties.message AS message,
+      count() AS occurrences,
+      uniq(person_id) AS people,
+      max(timestamp) AS last_seen
+    FROM events WHERE event = 'application_failure' AND ${since(d)}
+    GROUP BY step_index, message
+    ORDER BY occurrences DESC LIMIT 25`,
+
+  // What applicants are actually asking for.
+  application_services: (d) => `
+    SELECT
+      replaceAll(arrayJoin(JSONExtractArrayRaw(coalesce(toString(properties.services), '[]'))), '"', '') AS service,
+      uniq(person_id) AS applicants
+    FROM events WHERE event = 'application_services_selected' AND ${since(d)}
+    GROUP BY service ORDER BY applicants DESC`,
+
+  application_plans: (d) => `
+    SELECT
+      replaceAll(arrayJoin(JSONExtractArrayRaw(coalesce(toString(properties.plans), '[]'))), '"', '') AS plan,
+      uniq(person_id) AS applicants
+    FROM events WHERE event = 'application_plan_selected' AND ${since(d)}
+    GROUP BY plan ORDER BY applicants DESC`,
+
+  // JavaScript errors real visitors hit.
+  site_errors: (d) => `
+    SELECT
+      properties.$exception_message AS message,
+      properties.$pathname AS path,
+      count() AS occurrences,
+      uniq(person_id) AS people,
+      max(timestamp) AS last_seen
+    FROM events WHERE event = '$exception' AND ${since(d)}
+    GROUP BY message, path ORDER BY occurrences DESC LIMIT 25`,
 
   // Validation errors are the usual reason a step leaks.
   application_errors: (d) => `
@@ -178,26 +367,29 @@ const QUERIES = {
       count() AS error_events,
       uniq(distinct_id) AS people
     FROM events WHERE event = 'application_step_error' AND ${since(d)}
+      AND ${inCurrentFlow}
     GROUP BY step_index ORDER BY error_events DESC`,
 
-  // Identified drop-offs for follow-up. Anyone who later submitted is excluded.
+  // Identified drop-offs for follow-up. Derived the same way, so a lead is
+  // listed even if their browser never got to report leaving.
   abandoned_leads: (d) => `
     SELECT
-      person.properties.email AS email,
-      person.properties.name AS name,
-      person.properties.phone AS phone,
-      person.properties.businessName AS business,
-      max(toInt(properties.furthest_step_index)) AS furthest_step,
-      any(properties.furthest_step_name) AS furthest_step_name,
+      argMax(person.properties.email, timestamp) AS email,
+      argMax(person.properties.name, timestamp) AS name,
+      argMax(person.properties.phone, timestamp) AS phone,
+      argMax(person.properties.businessName, timestamp) AS business,
+      max(toInt(properties.step_index)) AS furthest_step,
+      argMax(properties.step_name, toInt(properties.step_index)) AS furthest_step_name,
       max(timestamp) AS last_seen
     FROM events
-    WHERE event = 'application_abandoned' AND ${since(d)}
-      AND person.properties.email != ''
-      AND person.properties.email NOT IN (
-        SELECT person.properties.email FROM events
+    WHERE event = 'application_step_viewed' AND ${since(d)}
+    GROUP BY person_id
+    HAVING isNotNull(email) AND email != ''
+      AND last_seen < now() - INTERVAL ${IDLE_MINUTES} MINUTE
+      AND person_id NOT IN (
+        SELECT person_id FROM events
         WHERE event = 'application_submitted' AND ${since(d)}
       )
-    GROUP BY email, name, phone, business
     ORDER BY last_seen DESC LIMIT 100`,
 
   form_performance: (d) => `

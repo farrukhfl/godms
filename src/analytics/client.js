@@ -5,7 +5,36 @@
 // so no call site can bypass the redaction guards in redact.js.
 
 import { ANALYTICS_ENABLED, POSTHOG_HOST, POSTHOG_KEY } from './config'
-import { sanitizePerson, sanitizeProperties } from './redact'
+import { isSensitiveValue, sanitizePerson, sanitizeProperties } from './redact'
+
+/**
+ * Last line of defence for events the SDK raises itself.
+ *
+ * Autocaptured exceptions do not pass through track(), so they never meet the
+ * redaction guards. A thrown error can carry whatever string was being handled
+ * at the time, which in this application could be a bank or tax number. Rather
+ * than truncating stack traces and losing their value, an exception whose text
+ * looks like it carries regulated data is dropped in full.
+ *
+ * Only the human-readable fields are examined. Scanning the whole payload would
+ * match millisecond timestamps as long digit runs and discard every exception.
+ */
+function beforeSend(event) {
+  if (!event || event.event !== '$exception') return event
+
+  const properties = event.properties || {}
+  const text = [
+    properties.$exception_message,
+    properties.$exception_stack_trace_raw,
+    ...(Array.isArray(properties.$exception_list)
+      ? properties.$exception_list.flatMap((item) => [item?.value, item?.type])
+      : []),
+  ]
+    .filter((part) => typeof part === 'string')
+    .join(' ')
+
+  return isSensitiveValue(text) ? null : event
+}
 
 let posthogPromise = null
 let posthog = null
@@ -55,6 +84,10 @@ export function initAnalytics() {
         respect_dnt: true,
         mask_all_text: true,
         mask_all_element_attributes: true,
+        // Surfaces JavaScript errors real visitors hit, so a broken build is
+        // noticed before someone phones in. Guarded by beforeSend above.
+        capture_exceptions: true,
+        before_send: beforeSend,
       })
 
       posthog = client
@@ -90,10 +123,32 @@ function withClient(run) {
   })
 }
 
-/** Records an event. Properties are sanitized before they leave the browser. */
-export function track(event, properties = {}) {
+/**
+ * Records an event. Properties are sanitized before they leave the browser.
+ *
+ * Pass `{ beacon: true }` for anything captured while the page is going away.
+ * The SDK's normal transport is XHR or fetch, and the browser cancels those
+ * in-flight requests when a tab closes - our `pagehide` listener runs before
+ * PostHog's own, so it does not benefit from the SDK's internal beacon switch.
+ * `sendBeacon` is handed to the browser and survives the page's death, which is
+ * the difference between recording an abandonment and losing it.
+ */
+export function track(event, properties = {}, options = {}) {
   withClient((client) => {
-    client.capture(event, sanitizeProperties(properties) || {})
+    const captureOptions = options.beacon
+      ? { transport: 'sendBeacon', send_instantly: true }
+      : undefined
+
+    client.capture(event, sanitizeProperties(properties) || {}, captureOptions)
+
+    // Drain anything still queued while the page is alive to do it.
+    if (options.beacon && typeof client.flush === 'function') {
+      try {
+        client.flush('sendBeacon')
+      } catch {
+        // Older SDKs without flush(): the capture above already used a beacon.
+      }
+    }
   })
 }
 
