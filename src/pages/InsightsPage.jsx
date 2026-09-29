@@ -244,7 +244,7 @@ function Dashboard({ onLock }) {
 
         <SectionHeading
           title="Merchant application"
-          description="The nine-step flow at /open-an-account. An application counts as abandoned once it has gone 30 minutes untouched without being submitted, so nothing is missed when a browser closes without warning."
+          description={`The ${APPLICATION_STEP_COUNT}-step flow at /open-an-account. An application counts as abandoned once it has gone 30 minutes untouched without being submitted, so nothing is missed when a browser closes without warning.`}
         />
 
         <div className="grid gap-5 lg:grid-cols-5">
@@ -254,7 +254,7 @@ function Dashboard({ onLock }) {
               title="Application funnel"
               subtitle="How many people reached each step, and how many left at each one."
             >
-              <PanelState query={funnel} skeleton={9}>
+              <PanelState query={funnel} skeleton={APPLICATION_STEP_COUNT}>
                 <StepFunnel rows={funnel.rows} />
               </PanelState>
             </Panel>
@@ -362,7 +362,7 @@ function Dashboard({ onLock }) {
 
         <Panel
           title="Phone versus computer"
-          subtitle="A nine-step form with document uploads is far harder on a phone. If mobile completion lags, that is the fix with the most upside."
+          subtitle="A multi-step form with document uploads is far harder on a phone. If mobile completion lags, that is the fix with the most upside."
         >
           <PanelState query={byDevice} skeleton={3}>
             <DataTable
@@ -371,13 +371,13 @@ function Dashboard({ onLock }) {
               columns={[
                 { key: 'device', label: 'Device' },
                 { key: 'started', label: 'Started', render: (row) => number(row.started) },
-                { key: 'reached_halfway', label: 'Reached step 5', render: (row) => number(row.reached_halfway) },
-                { key: 'reached_submit', label: 'Reached submit', render: (row) => number(row.reached_submit) },
                 {
-                  key: 'through',
-                  label: 'Got to the end',
-                  render: (row) => rate(row.reached_submit, row.started),
+                  key: 'avg_step_reached',
+                  label: 'Average step reached',
+                  render: (row) => `${row.avg_step_reached ?? '—'} of ${APPLICATION_STEP_COUNT}`,
                 },
+                { key: 'completed', label: 'Submitted', render: (row) => number(row.completed) },
+                { key: 'through', label: 'Completion', render: (row) => rate(row.completed, row.started) },
               ]}
             />
           </PanelState>
@@ -453,7 +453,7 @@ function Dashboard({ onLock }) {
 
       <SectionHeading
         title="Other website forms"
-        description="Contact, careers, referral, partner program, product order and sign-in. The merchant application is a nine-step flow rather than a single form, so it is counted in the section above."
+        description={`Contact, careers, referral, partner program, product order and sign-in. The merchant application is a ${APPLICATION_STEP_COUNT}-step flow rather than a single form, so it is counted in the section above.`}
       />
 
       <div className="grid gap-4 sm:grid-cols-3">

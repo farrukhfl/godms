@@ -255,15 +255,30 @@ const QUERIES = {
     FROM events WHERE event = 'application_step_back' AND ${since(d)}
     GROUP BY step_index ORDER BY times_back DESC`,
 
-  // Completion split by device. A nine-step form with document uploads behaves
+  // Completion split by device. A multi-step form with document uploads behaves
   // very differently on a phone, and an averaged funnel hides that entirely.
+  //
+  // Deliberately free of step numbers: it reports how far people got and
+  // whether they finished, so restructuring the flow cannot silently break it.
   funnel_by_device: (d) => `
     SELECT
-      coalesce(nullIf(properties.$device_type, ''), 'Unknown') AS device,
-      uniq(person_id) AS started,
-      uniqIf(person_id, toInt(properties.step_index) >= 5) AS reached_halfway,
-      uniqIf(person_id, toInt(properties.step_index) = 9) AS reached_submit
-    FROM events WHERE event = 'application_step_viewed' AND ${since(d)}
+      device,
+      count() AS started,
+      round(avg(furthest_step), 1) AS avg_step_reached,
+      countIf(has_submitted) AS completed
+    FROM (
+      SELECT
+        person_id,
+        argMax(coalesce(nullIf(properties.$device_type, ''), 'Unknown'), timestamp) AS device,
+        max(toInt(properties.step_index)) AS furthest_step,
+        person_id IN (
+          SELECT person_id FROM events
+          WHERE event = 'application_submitted' AND ${since(d)}
+        ) AS has_submitted
+      FROM events
+      WHERE event = 'application_step_viewed' AND ${since(d)}
+      GROUP BY person_id
+    )
     GROUP BY device ORDER BY started DESC`,
 
   // Requests that failed on the applicant. These are outages, not indecision.
