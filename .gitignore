@@ -40,3 +40,7 @@ SECURITY_AUDIT_REPORT.md
 .env.production
 .env.staging
 .env.test
+
+# Scratch notes, specs and API dumps kept alongside the code
+*.txt
+!public/robots.txt
