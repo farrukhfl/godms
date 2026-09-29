@@ -36,7 +36,11 @@ export default function useApplicationTracking({ step, values, errors, applicati
   useEffect(() => {
     if (!started.current) {
       started.current = true
-      track('application_started', { step_name: stepLabel(step), step_index: step + 1 })
+      track('application_started', {
+        step_name: stepLabel(step),
+        step_index: step + 1,
+        total_steps: APPLICATION_STEP_COUNT,
+      })
     }
 
     const previous = previousStep.current
@@ -44,6 +48,7 @@ export default function useApplicationTracking({ step, values, errors, applicati
       track(step > previous ? 'application_step_completed' : 'application_step_back', {
         step_name: stepLabel(previous),
         step_index: previous + 1,
+        total_steps: APPLICATION_STEP_COUNT,
         seconds_spent: Math.round((Date.now() - enteredAt.current) / 1000),
       })
     }
@@ -74,6 +79,7 @@ export default function useApplicationTracking({ step, values, errors, applicati
     track('application_step_error', {
       step_name: stepLabel(step),
       step_index: step + 1,
+      total_steps: APPLICATION_STEP_COUNT,
       error_count: failed.length,
       fields: failed,
     })
@@ -92,6 +98,7 @@ export default function useApplicationTracking({ step, values, errors, applicati
     track('application_failure', {
       step_name: stepLabel(step),
       step_index: step + 1,
+      total_steps: APPLICATION_STEP_COUNT,
       message,
     })
   }, [error, step])
@@ -159,6 +166,7 @@ export default function useApplicationTracking({ step, values, errors, applicati
           reason,
           step_name: stepLabel(snapshot.current.step),
           step_index: snapshot.current.step + 1,
+          total_steps: APPLICATION_STEP_COUNT,
           furthest_step_name: stepLabel(furthestStep.current),
           furthest_step_index: furthestStep.current + 1,
           seconds_on_step: Math.round((Date.now() - enteredAt.current) / 1000),

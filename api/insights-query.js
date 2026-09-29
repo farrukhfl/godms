@@ -22,6 +22,33 @@ const PASSWORD = process.env.INSIGHTS_PASSWORD
 
 const since = (days) => `timestamp > now() - INTERVAL ${days} DAY`
 
+// The application has been restructured before, and step numbers were reused
+// for entirely different steps: step 2 was Business, now it is Plan. Grouping by
+// step number alone stacks two different forms into one chart and invents rows
+// for steps that no longer exist, which is worse than showing nothing.
+//
+// `total_steps` on application_step_viewed identifies the structure in use, and
+// the current one is simply whichever was seen most recently - so this keeps
+// working after the next restructure with nothing to remember.
+const CURRENT_TOTAL_STEPS = `(
+  SELECT argMax(toInt(properties.total_steps), timestamp) FROM events
+  WHERE event = 'application_step_viewed' AND isNotNull(properties.total_steps)
+)`
+
+// Matching on the number *and* name together is what makes this retroactive:
+// events recorded before total_steps was stamped on them are still placed
+// correctly, and names shared between versions ('Submit') cannot cross over.
+const CURRENT_FLOW_STEPS = `
+  SELECT
+    toInt(properties.step_index) AS step_index,
+    toString(properties.step_name) AS step_name
+  FROM events
+  WHERE event = 'application_step_viewed'
+    AND toInt(properties.total_steps) = ${CURRENT_TOTAL_STEPS}
+  GROUP BY step_index, step_name`
+
+const inCurrentFlow = `(toInt(properties.step_index), toString(properties.step_name)) IN (${CURRENT_FLOW_STEPS})`
+
 // How long an application must be untouched before it counts as abandoned
 // rather than still in progress. Someone mid-form who steps away for coffee
 // should not appear in a follow-up list.
@@ -37,7 +64,11 @@ const IDLE_MINUTES = 30
 // So an abandoned application is defined as a person who reached a step, never
 // submitted, and has not been seen since. Nothing can be missed, because the
 // evidence was already collected before they left.
-const abandonedPeople = (days) => `
+// `currentFlowOnly` is for the step-shaped chart of where people give up:
+// a step number means nothing across two different structures of the form.
+// Person-level figures leave it off on purpose, because someone who abandoned
+// an older version of the form is still a real lost lead worth calling.
+const abandonedPeople = (days, { currentFlowOnly = false } = {}) => `
   SELECT
     person_id,
     max(toInt(properties.step_index)) AS furthest_step,
@@ -46,6 +77,7 @@ const abandonedPeople = (days) => `
     max(timestamp) AS last_seen
   FROM events
   WHERE event = 'application_step_viewed' AND ${since(days)}
+    ${currentFlowOnly ? `AND ${inCurrentFlow}` : ''}
   GROUP BY person_id
   HAVING last_seen < now() - INTERVAL ${IDLE_MINUTES} MINUTE
     AND person_id NOT IN (
@@ -196,16 +228,20 @@ const QUERIES = {
     FROM events WHERE event = '$pageview' AND ${since(d)}
     GROUP BY country ORDER BY visitors DESC LIMIT 15`,
 
-  // One row per application step: how many reached it, how many moved on.
+  // One row per application step: how many people reached it.
+  //
+  // Step views alone are enough - how many moved on is simply how many reached
+  // the next step, which the funnel derives. Reading one event type also lets
+  // this filter on total_steps directly instead of the step-pair match, which
+  // is the difference between a query that returns and one that times out.
   application_funnel: (d) => `
     SELECT
       toInt(properties.step_index) AS step_index,
       any(properties.step_name) AS step_name,
-      uniqIf(distinct_id, event = 'application_step_viewed') AS reached,
-      uniqIf(distinct_id, event = 'application_step_completed') AS completed
+      uniq(person_id) AS reached
     FROM events
-    WHERE event IN ('application_step_viewed', 'application_step_completed')
-      AND ${since(d)}
+    WHERE event = 'application_step_viewed' AND ${since(d)}
+      AND toInt(properties.total_steps) = ${CURRENT_TOTAL_STEPS}
     GROUP BY step_index ORDER BY step_index`,
 
   // Where people give up, by the furthest step they reached.
@@ -215,7 +251,7 @@ const QUERIES = {
       furthest_step_name AS step_name,
       count() AS abandons,
       round(avg(dateDiff('second', first_seen, last_seen))) AS avg_seconds
-    FROM (${abandonedPeople(d)})
+    FROM (${abandonedPeople(d, { currentFlowOnly: true })})
     GROUP BY step_index, step_name
     ORDER BY abandons DESC`,
 
@@ -231,6 +267,7 @@ const QUERIES = {
       count() AS completions
     FROM events
     WHERE event = 'application_step_completed' AND ${since(d)}
+      AND ${inCurrentFlow}
       AND toFloat(properties.seconds_spent) > 0
     GROUP BY step_index ORDER BY step_index`,
 
@@ -243,6 +280,7 @@ const QUERIES = {
       count() AS failures,
       uniq(person_id) AS people
     FROM events WHERE event = 'application_step_error' AND ${since(d)}
+      AND ${inCurrentFlow}
     GROUP BY field ORDER BY failures DESC LIMIT 25`,
 
   // Going back means something earlier was unclear or entered wrongly.
@@ -253,6 +291,7 @@ const QUERIES = {
       count() AS times_back,
       uniq(person_id) AS people
     FROM events WHERE event = 'application_step_back' AND ${since(d)}
+      AND ${inCurrentFlow}
     GROUP BY step_index ORDER BY times_back DESC`,
 
   // Completion split by device. A multi-step form with document uploads behaves
@@ -328,6 +367,7 @@ const QUERIES = {
       count() AS error_events,
       uniq(distinct_id) AS people
     FROM events WHERE event = 'application_step_error' AND ${since(d)}
+      AND ${inCurrentFlow}
     GROUP BY step_index ORDER BY error_events DESC`,
 
   // Identified drop-offs for follow-up. Derived the same way, so a lead is
