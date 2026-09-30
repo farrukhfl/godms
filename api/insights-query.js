@@ -20,7 +20,18 @@ const PROJECT_ID = process.env.POSTHOG_PROJECT_ID
 const READ_KEY = process.env.POSTHOG_READ_KEY
 const PASSWORD = process.env.INSIGHTS_PASSWORD
 
-const since = (days) => `timestamp > now() - INTERVAL ${days} DAY`
+// Analytics for one site at a time.
+//
+// Test and production can share a PostHog project and the same credentials:
+// every event records the site it came from, so the dashboard shows only the
+// host it is being served from. A fresh domain therefore starts empty without
+// anything being reconfigured, and a staging deployment cannot flatter or
+// pollute production's figures.
+//
+// INSIGHTS_HOST_FILTER pins a specific host, or the literal 'all' to opt out.
+const hostClause = (host) => (host ? ` AND properties.$host = '${host}'` : '')
+
+const since = (days, host) => `timestamp > now() - INTERVAL ${days} DAY${hostClause(host)}`
 
 // The application has been restructured before, and step numbers were reused
 // for entirely different steps: step 2 was Business, now it is Plan. Grouping by
@@ -30,24 +41,24 @@ const since = (days) => `timestamp > now() - INTERVAL ${days} DAY`
 // `total_steps` on application_step_viewed identifies the structure in use, and
 // the current one is simply whichever was seen most recently - so this keeps
 // working after the next restructure with nothing to remember.
-const CURRENT_TOTAL_STEPS = `(
+const currentTotalSteps = (host) => `(
   SELECT argMax(toInt(properties.total_steps), timestamp) FROM events
-  WHERE event = 'application_step_viewed' AND isNotNull(properties.total_steps)
+  WHERE event = 'application_step_viewed' AND isNotNull(properties.total_steps)${hostClause(host)}
 )`
 
 // Matching on the number *and* name together is what makes this retroactive:
 // events recorded before total_steps was stamped on them are still placed
 // correctly, and names shared between versions ('Submit') cannot cross over.
-const CURRENT_FLOW_STEPS = `
+const currentFlowSteps = (host) => `
   SELECT
     toInt(properties.step_index) AS step_index,
     toString(properties.step_name) AS step_name
   FROM events
   WHERE event = 'application_step_viewed'
-    AND toInt(properties.total_steps) = ${CURRENT_TOTAL_STEPS}
+    AND toInt(properties.total_steps) = ${currentTotalSteps(host)}${hostClause(host)}
   GROUP BY step_index, step_name`
 
-const inCurrentFlow = `(toInt(properties.step_index), toString(properties.step_name)) IN (${CURRENT_FLOW_STEPS})`
+const inCurrentFlow = (host) => `(toInt(properties.step_index), toString(properties.step_name)) IN (${currentFlowSteps(host)})`
 
 // How long an application must be untouched before it counts as abandoned
 // rather than still in progress. Someone mid-form who steps away for coffee
@@ -68,7 +79,7 @@ const IDLE_MINUTES = 30
 // a step number means nothing across two different structures of the form.
 // Person-level figures leave it off on purpose, because someone who abandoned
 // an older version of the form is still a real lost lead worth calling.
-const abandonedPeople = (days, { currentFlowOnly = false } = {}) => `
+const abandonedPeople = (days, host, { currentFlowOnly = false } = {}) => `
   SELECT
     person_id,
     max(toInt(properties.step_index)) AS furthest_step,
@@ -76,13 +87,13 @@ const abandonedPeople = (days, { currentFlowOnly = false } = {}) => `
     min(timestamp) AS first_seen,
     max(timestamp) AS last_seen
   FROM events
-  WHERE event = 'application_step_viewed' AND ${since(days)}
-    ${currentFlowOnly ? `AND ${inCurrentFlow}` : ''}
+  WHERE event = 'application_step_viewed' AND ${since(days, host)}
+    ${currentFlowOnly ? `AND ${inCurrentFlow(host)}` : ''}
   GROUP BY person_id
   HAVING last_seen < now() - INTERVAL ${IDLE_MINUTES} MINUTE
     AND person_id NOT IN (
       SELECT person_id FROM events
-      WHERE event = 'application_submitted' AND ${since(days)}
+      WHERE event = 'application_submitted' AND ${since(days, host)}
     )`
 
 /**
@@ -145,7 +156,7 @@ function recordFailure(ip) {
 }
 
 const QUERIES = {
-  overview: (d) => `
+  overview: (d, h) => `
     SELECT
       countIf(event = '$pageview') AS pageviews,
       uniq(distinct_id) AS visitors,
@@ -153,50 +164,50 @@ const QUERIES = {
       countIf(event = 'form_started') AS form_starts,
       countIf(event = 'form_submitted') AS form_submits,
       countIf(event = 'form_abandoned') AS form_abandons
-    FROM events WHERE ${since(d)}`,
+    FROM events WHERE ${since(d, h)}`,
 
   // Application totals, counted per person rather than per event, with
   // abandonment derived from inactivity instead of a departure signal.
-  application_summary: (d) => `
+  application_summary: (d, h) => `
     SELECT
       (SELECT uniq(person_id) FROM events
-        WHERE event = 'application_step_viewed' AND ${since(d)}) AS started,
+        WHERE event = 'application_step_viewed' AND ${since(d, h)}) AS started,
       (SELECT uniq(person_id) FROM events
-        WHERE event = 'application_submitted' AND ${since(d)}) AS submitted,
-      (SELECT count() FROM (${abandonedPeople(d)})) AS abandoned,
+        WHERE event = 'application_submitted' AND ${since(d, h)}) AS submitted,
+      (SELECT count() FROM (${abandonedPeople(d, h)})) AS abandoned,
       (SELECT count() FROM (
         SELECT person_id, max(timestamp) AS last_seen
-        FROM events WHERE event = 'application_step_viewed' AND ${since(d)}
+        FROM events WHERE event = 'application_step_viewed' AND ${since(d, h)}
         GROUP BY person_id
         HAVING last_seen >= now() - INTERVAL ${IDLE_MINUTES} MINUTE
           AND person_id NOT IN (
             SELECT person_id FROM events
-            WHERE event = 'application_submitted' AND ${since(d)}
+            WHERE event = 'application_submitted' AND ${since(d, h)}
           )
       )) AS in_progress`,
 
-  daily_trend: (d) => `
+  daily_trend: (d, h) => `
     SELECT toDate(timestamp) AS day,
       countIf(event = '$pageview') AS pageviews,
       uniq(distinct_id) AS visitors,
       countIf(event = 'application_started') AS app_starts,
       countIf(event = 'application_submitted') AS app_submits
-    FROM events WHERE ${since(d)}
+    FROM events WHERE ${since(d, h)}
     GROUP BY day ORDER BY day`,
 
   // Dashboard paths are filtered here as well as at collection time, so rows
   // recorded before the exclusion existed stay out of the site's page figures.
-  top_pages: (d) => `
+  top_pages: (d, h) => `
     SELECT properties.$pathname AS path,
       count() AS views,
       uniq(distinct_id) AS visitors
-    FROM events WHERE event = '$pageview' AND ${since(d)}
+    FROM events WHERE event = '$pageview' AND ${since(d, h)}
       AND properties.$pathname NOT LIKE '/insight%'
     GROUP BY path ORDER BY views DESC LIMIT 25`,
 
   // PostHog records direct traffic as the literal string '$direct', so it is
   // relabelled here rather than leaking an internal token into the dashboard.
-  traffic_sources: (d) => `
+  traffic_sources: (d, h) => `
     SELECT
       multiIf(
         properties.$referring_domain IN ('$direct', '', NULL), 'Direct',
@@ -204,28 +215,28 @@ const QUERIES = {
       ) AS source,
       uniq(distinct_id) AS visitors,
       count() AS events
-    FROM events WHERE event = '$pageview' AND ${since(d)}
+    FROM events WHERE event = '$pageview' AND ${since(d, h)}
     GROUP BY source ORDER BY visitors DESC LIMIT 20`,
 
-  campaigns: (d) => `
+  campaigns: (d, h) => `
     SELECT
       coalesce(nullIf(properties.utm_source, ''), 'none') AS utm_source,
       coalesce(nullIf(properties.utm_campaign, ''), 'none') AS utm_campaign,
       uniq(distinct_id) AS visitors
-    FROM events WHERE event = '$pageview' AND ${since(d)}
+    FROM events WHERE event = '$pageview' AND ${since(d, h)}
     GROUP BY utm_source, utm_campaign
     HAVING utm_source != 'none' ORDER BY visitors DESC LIMIT 20`,
 
-  devices: (d) => `
+  devices: (d, h) => `
     SELECT coalesce(nullIf(properties.$device_type, ''), 'Unknown') AS device,
       uniq(distinct_id) AS visitors
-    FROM events WHERE event = '$pageview' AND ${since(d)}
+    FROM events WHERE event = '$pageview' AND ${since(d, h)}
     GROUP BY device ORDER BY visitors DESC`,
 
-  countries: (d) => `
+  countries: (d, h) => `
     SELECT coalesce(nullIf(properties.$geoip_country_name, ''), 'Unknown') AS country,
       uniq(distinct_id) AS visitors
-    FROM events WHERE event = '$pageview' AND ${since(d)}
+    FROM events WHERE event = '$pageview' AND ${since(d, h)}
     GROUP BY country ORDER BY visitors DESC LIMIT 15`,
 
   // One row per application step: how many people reached it.
@@ -234,30 +245,30 @@ const QUERIES = {
   // the next step, which the funnel derives. Reading one event type also lets
   // this filter on total_steps directly instead of the step-pair match, which
   // is the difference between a query that returns and one that times out.
-  application_funnel: (d) => `
+  application_funnel: (d, h) => `
     SELECT
       toInt(properties.step_index) AS step_index,
       any(properties.step_name) AS step_name,
       uniq(person_id) AS reached
     FROM events
-    WHERE event = 'application_step_viewed' AND ${since(d)}
-      AND toInt(properties.total_steps) = ${CURRENT_TOTAL_STEPS}
+    WHERE event = 'application_step_viewed' AND ${since(d, h)}
+      AND toInt(properties.total_steps) = ${currentTotalSteps(h)}
     GROUP BY step_index ORDER BY step_index`,
 
   // Where people give up, by the furthest step they reached.
-  application_dropoff: (d) => `
+  application_dropoff: (d, h) => `
     SELECT
       furthest_step AS step_index,
       furthest_step_name AS step_name,
       count() AS abandons,
       round(avg(dateDiff('second', first_seen, last_seen))) AS avg_seconds
-    FROM (${abandonedPeople(d, { currentFlowOnly: true })})
+    FROM (${abandonedPeople(d, h, { currentFlowOnly: true })})
     GROUP BY step_index, step_name
     ORDER BY abandons DESC`,
 
   // How long each step actually takes. A step that is slow is a step that is
   // hard, and the funnel alone cannot tell the difference.
-  application_step_timing: (d) => `
+  application_step_timing: (d, h) => `
     SELECT
       toInt(properties.step_index) AS step_index,
       any(properties.step_name) AS step_name,
@@ -266,32 +277,32 @@ const QUERIES = {
       round(max(toFloat(properties.seconds_spent))) AS slowest_seconds,
       count() AS completions
     FROM events
-    WHERE event = 'application_step_completed' AND ${since(d)}
-      AND ${inCurrentFlow}
+    WHERE event = 'application_step_completed' AND ${since(d, h)}
+      AND ${inCurrentFlow(h)}
       AND toFloat(properties.seconds_spent) > 0
     GROUP BY step_index ORDER BY step_index`,
 
   // The individual fields people get wrong, not just the step they were on.
   // Array properties arrive as nullable JSON strings, hence the unwrapping.
-  application_error_fields: (d) => `
+  application_error_fields: (d, h) => `
     SELECT
       replaceAll(arrayJoin(JSONExtractArrayRaw(coalesce(toString(properties.fields), '[]'))), '"', '') AS field,
       any(properties.step_name) AS step_name,
       count() AS failures,
       uniq(person_id) AS people
-    FROM events WHERE event = 'application_step_error' AND ${since(d)}
-      AND ${inCurrentFlow}
+    FROM events WHERE event = 'application_step_error' AND ${since(d, h)}
+      AND ${inCurrentFlow(h)}
     GROUP BY field ORDER BY failures DESC LIMIT 25`,
 
   // Going back means something earlier was unclear or entered wrongly.
-  application_back_steps: (d) => `
+  application_back_steps: (d, h) => `
     SELECT
       toInt(properties.step_index) AS step_index,
       any(properties.step_name) AS step_name,
       count() AS times_back,
       uniq(person_id) AS people
-    FROM events WHERE event = 'application_step_back' AND ${since(d)}
-      AND ${inCurrentFlow}
+    FROM events WHERE event = 'application_step_back' AND ${since(d, h)}
+      AND ${inCurrentFlow(h)}
     GROUP BY step_index ORDER BY times_back DESC`,
 
   // Completion split by device. A multi-step form with document uploads behaves
@@ -299,7 +310,7 @@ const QUERIES = {
   //
   // Deliberately free of step numbers: it reports how far people got and
   // whether they finished, so restructuring the flow cannot silently break it.
-  funnel_by_device: (d) => `
+  funnel_by_device: (d, h) => `
     SELECT
       device,
       count() AS started,
@@ -312,16 +323,16 @@ const QUERIES = {
         max(toInt(properties.step_index)) AS furthest_step,
         person_id IN (
           SELECT person_id FROM events
-          WHERE event = 'application_submitted' AND ${since(d)}
+          WHERE event = 'application_submitted' AND ${since(d, h)}
         ) AS has_submitted
       FROM events
-      WHERE event = 'application_step_viewed' AND ${since(d)}
+      WHERE event = 'application_step_viewed' AND ${since(d, h)}
       GROUP BY person_id
     )
     GROUP BY device ORDER BY started DESC`,
 
   // Requests that failed on the applicant. These are outages, not indecision.
-  application_failures: (d) => `
+  application_failures: (d, h) => `
     SELECT
       any(properties.step_name) AS step_name,
       toInt(properties.step_index) AS step_index,
@@ -329,45 +340,45 @@ const QUERIES = {
       count() AS occurrences,
       uniq(person_id) AS people,
       max(timestamp) AS last_seen
-    FROM events WHERE event = 'application_failure' AND ${since(d)}
+    FROM events WHERE event = 'application_failure' AND ${since(d, h)}
     GROUP BY step_index, message
     ORDER BY occurrences DESC LIMIT 25`,
 
   // What applicants are actually asking for.
-  application_services: (d) => `
+  application_services: (d, h) => `
     SELECT
       replaceAll(arrayJoin(JSONExtractArrayRaw(coalesce(toString(properties.services), '[]'))), '"', '') AS service,
       uniq(person_id) AS applicants
-    FROM events WHERE event = 'application_services_selected' AND ${since(d)}
+    FROM events WHERE event = 'application_services_selected' AND ${since(d, h)}
     GROUP BY service ORDER BY applicants DESC`,
 
-  application_plans: (d) => `
+  application_plans: (d, h) => `
     SELECT
       replaceAll(arrayJoin(JSONExtractArrayRaw(coalesce(toString(properties.plans), '[]'))), '"', '') AS plan,
       uniq(person_id) AS applicants
-    FROM events WHERE event = 'application_plan_selected' AND ${since(d)}
+    FROM events WHERE event = 'application_plan_selected' AND ${since(d, h)}
     GROUP BY plan ORDER BY applicants DESC`,
 
   // JavaScript errors real visitors hit.
-  site_errors: (d) => `
+  site_errors: (d, h) => `
     SELECT
       properties.$exception_message AS message,
       properties.$pathname AS path,
       count() AS occurrences,
       uniq(person_id) AS people,
       max(timestamp) AS last_seen
-    FROM events WHERE event = '$exception' AND ${since(d)}
+    FROM events WHERE event = '$exception' AND ${since(d, h)}
     GROUP BY message, path ORDER BY occurrences DESC LIMIT 25`,
 
   // Validation errors are the usual reason a step leaks.
-  application_errors: (d) => `
+  application_errors: (d, h) => `
     SELECT
       any(properties.step_name) AS step_name,
       toInt(properties.step_index) AS step_index,
       count() AS error_events,
       uniq(distinct_id) AS people
-    FROM events WHERE event = 'application_step_error' AND ${since(d)}
-      AND ${inCurrentFlow}
+    FROM events WHERE event = 'application_step_error' AND ${since(d, h)}
+      AND ${inCurrentFlow(h)}
     GROUP BY step_index ORDER BY error_events DESC`,
 
   // Identified drop-offs for follow-up. Derived the same way, so a lead is
@@ -382,7 +393,7 @@ const QUERIES = {
   //
   // Contactable rows sort first so the follow-up list stays usable, and the
   // count of the rest is visible rather than silently dropped.
-  abandoned_leads: (d) => `
+  abandoned_leads: (d, h) => `
     SELECT
       argMax(person.properties.email, timestamp) AS email,
       argMax(person.properties.name, timestamp) AS name,
@@ -403,30 +414,49 @@ const QUERIES = {
       if(isNotNull(argMax(person.properties.email, timestamp))
         AND argMax(person.properties.email, timestamp) != '', 1, 0) AS contactable
     FROM events
-    WHERE event = 'application_step_viewed' AND ${since(d)}
+    WHERE event = 'application_step_viewed' AND ${since(d, h)}
     GROUP BY person_id
     HAVING last_seen < now() - INTERVAL ${IDLE_MINUTES} MINUTE
       AND person_id NOT IN (
         SELECT person_id FROM events
-        WHERE event = 'application_submitted' AND ${since(d)}
+        WHERE event = 'application_submitted' AND ${since(d, h)}
       )
     ORDER BY contactable DESC, last_seen DESC LIMIT 200`,
 
-  form_performance: (d) => `
+  form_performance: (d, h) => `
     SELECT properties.form_name AS form_name,
       countIf(event = 'form_started') AS started,
       countIf(event = 'form_submitted') AS submitted,
       countIf(event = 'form_abandoned') AS abandoned
     FROM events
-    WHERE event IN ('form_started', 'form_submitted', 'form_abandoned') AND ${since(d)}
+    WHERE event IN ('form_started', 'form_submitted', 'form_abandoned') AND ${since(d, h)}
     GROUP BY form_name ORDER BY started DESC`,
 
-  form_dropoff_fields: (d) => `
+  form_dropoff_fields: (d, h) => `
     SELECT properties.form_name AS form_name,
       properties.last_field AS last_field,
       count() AS abandons
-    FROM events WHERE event = 'form_abandoned' AND ${since(d)}
+    FROM events WHERE event = 'form_abandoned' AND ${since(d, h)}
     GROUP BY form_name, last_field ORDER BY abandons DESC LIMIT 25`,
+}
+
+/**
+ * Which site's analytics to show. Taken from the request, so the very same
+ * build and the very same credentials give each deployment its own figures:
+ * the preview shows preview traffic, production shows production traffic.
+ *
+ * The value is validated against a hostname pattern before it reaches a query.
+ * An unrecognisable header falls back to showing everything rather than
+ * nothing, since a blank dashboard is a worse failure than a broad one.
+ */
+function scopeHost(req) {
+  const configured = (process.env.INSIGHTS_HOST_FILTER || '').trim().toLowerCase()
+  if (configured === 'all') return ''
+
+  const raw = configured || req.headers['x-forwarded-host'] || req.headers.host || ''
+  const host = String(raw).split(',')[0].trim().toLowerCase()
+  // Hostname, optionally with a port, so `localhost:5173` matches in development.
+  return /^[a-z0-9.-]+(:[0-9]+)?$/.test(host) ? host : ''
 }
 
 export default async function handler(req, res) {
@@ -474,7 +504,7 @@ export default async function handler(req, res) {
         Authorization: `Bearer ${READ_KEY}`,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ query: { kind: 'HogQLQuery', query: build(days) } }),
+      body: JSON.stringify({ query: { kind: 'HogQLQuery', query: build(days, scopeHost(req)) } }),
     })
 
     const data = await response.json().catch(() => ({}))
