@@ -1,7 +1,7 @@
 import { HelpCircle } from 'lucide-react'
 import { useState } from 'react'
 
-export const formControlClasses = 'mt-2 min-w-0 max-w-full w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-navy shadow-sm transition placeholder:text-slate-400 focus:border-primary focus:outline-none focus:ring-4 focus:ring-primary/10'
+export const formControlClasses = 'mt-1.5 min-w-0 max-w-full w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-navy shadow-sm transition placeholder:text-slate-400 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/15'
 
 export default function FormField({ id, label, error, required = false, tooltip, children }) {
   const [showTooltip, setShowTooltip] = useState(false)
@@ -9,7 +9,7 @@ export default function FormField({ id, label, error, required = false, tooltip,
   return (
     <div className="min-w-0 max-w-full">
       <div className="flex items-center justify-between">
-        <label htmlFor={id} className="text-sm font-bold text-navy flex items-center gap-1">
+        <label htmlFor={id} className="text-xs font-bold text-navy flex items-center gap-1">
           <span>{label}</span>
           {required && <span className="text-primary" aria-hidden="true">*</span>}
           {tooltip && (

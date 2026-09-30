@@ -239,6 +239,33 @@ function digits(value, max = 30) {
   return String(value || '').replace(/\D/g, '').slice(0, max)
 }
 
+const isEmail = (value) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(value ?? '').trim())
+
+// Money entry. `type="number"` inputs are not usable for this: browsers accept
+// "e", "+" and "-" inside them, and hand back an empty string for anything they
+// consider malformed, which silently wipes what the applicant typed. These
+// fields are plain text inputs filtered here instead, so only digits and a
+// single decimal point can ever reach state - and therefore the API.
+function amount(value, maxDecimals = 2) {
+  const cleaned = String(value ?? '').replace(/[^\d.]/g, '')
+  const [whole, ...rest] = cleaned.split('.')
+  const trimmedWhole = whole.slice(0, 12)
+  if (!rest.length) return trimmedWhole
+  return `${trimmedWhole}.${rest.join('').slice(0, maxDecimals)}`
+}
+
+// A money field is satisfied only by a positive number. Leaving this to the
+// server produced "monthlySale: Please enter a valid Monthly Sale" after the
+// applicant had already filled the whole step.
+function amountError(value, label) {
+  const raw = String(value ?? '').trim()
+  if (!raw) return 'This field is required.'
+  const parsed = Number(raw)
+  if (!Number.isFinite(parsed)) return `Enter ${label} as a number.`
+  if (parsed <= 0) return `${label} must be greater than zero.`
+  return null
+}
+
 function phone(value) {
   const number = digits(value, 10)
   if (number.length < 4) return number
@@ -398,7 +425,7 @@ function MaskedField({ id, label, required, error, tooltip, value, onChange, pla
           placeholder={placeholder}
           maxLength={maxLength}
           inputMode={inputMode}
-          className={`${formControlClasses} pr-11 ${error ? 'border-rose-500' : ''}`}
+          className={`${formControlClasses} pr-10 ${error ? 'border-rose-500' : ''}`}
         />
         <button
           type="button"
@@ -407,7 +434,7 @@ function MaskedField({ id, label, required, error, tooltip, value, onChange, pla
           className="absolute right-3 top-1/2 -translate-y-1/2 p-1.5 text-slate-400 hover:text-navy transition-colors focus:outline-none"
           aria-label={show ? 'Hide characters' : 'Show characters'}
         >
-          {show ? <EyeOff size={18} /> : <Eye size={18} />}
+          {show ? <EyeOff size={16} /> : <Eye size={16} />}
         </button>
       </div>
     </FormField>
@@ -1101,7 +1128,12 @@ function validate(step, values, selectedSolutions, plans, products, shipments, c
   }
 
   if (step === SCREEN.plan) {
-    if (Object.keys(plans).length < selectedSolutions.length) {
+    // Counting keys let plans left over from a previous service selection stand
+    // in for a missing one, so a service could pass this step unpriced.
+    const missingPlan = applications.length
+      ? applications.some((application) => !plans[application.applicationId])
+      : Object.keys(plans).length < selectedSolutions.length
+    if (missingPlan) {
       errors.plan = 'Please select one pricing plan for each requested service.'
     }
   }
@@ -1112,7 +1144,9 @@ function validate(step, values, selectedSolutions, plans, products, shipments, c
     ['legalName', 'legalAddress', 'legalZipCode', 'legalCity', 'legalState', 'contactNumber', 'taxType', 'feinNumber', 'ownerShipType', 'businessType', 'email', 'productsDescription'].forEach((key) => required(key, 'This field is required.'))
     if (digits(values.contactNumber, 20).length < 10) errors.contactNumber = 'Enter a valid 10-digit phone number.'
     if (digits(values.legalZipCode, 10).length !== 5) errors.legalZipCode = 'ZIP Code must be exactly 5 digits.'
-    if (values.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(values.email)) errors.email = 'Enter a valid business email address.'
+    // Trimmed before testing: a trailing space picked up from autofill or a
+    // paste made an otherwise correct address fail the pattern.
+    if (values.email && !isEmail(values.email)) errors.email = 'Enter a valid business email address.'
     if (digits(values.feinNumber, 20).length !== 9) errors.feinNumber = 'FEIN / Tax ID Number must contain exactly 9 digits.'
     if (values.productsDescription && !/\p{L}/u.test(values.productsDescription)) errors.productsDescription = 'Describe what your business sells using words, not only numbers.'
     if (selectedSolutions.includes('ebt')) required('ebtFnsNumber', 'FNS number is required for EBT processing.')
@@ -1125,6 +1159,7 @@ function validate(step, values, selectedSolutions, plans, products, shipments, c
     if (digits(values.ownerPhoneNumber, 20).length < 10) errors.ownerPhoneNumber = 'Enter a valid 10-digit owner phone number.'
     if (digits(values.ownerShipZip, 10).length !== 5) errors.ownerShipZip = 'Residential ZIP Code must be exactly 5 digits.'
     if (digits(values.socialSecurityNumber, 20).length !== 9) errors.socialSecurityNumber = 'Social Security Number must contain exactly 9 digits.'
+    if (values.ownerEmail && !isEmail(values.ownerEmail)) errors.ownerEmail = 'Enter a valid owner email address.'
     if (!values.dLFiles.length) errors.dLFiles = 'Upload a driver license or government-issued ID.'
 
     ;['accountNumber', 'routingNumber'].forEach((key) => required(key, 'This field is required.'))
@@ -1134,24 +1169,49 @@ function validate(step, values, selectedSolutions, plans, products, shipments, c
     }
     if (!values.bankFiles.length) errors.bankFiles = 'Upload a void check or bank letter.'
     if (selectedSolutions.some((solution) => saleSolutions.has(solution))) {
-      ['averageSale', 'maxSale', 'monthlySale'].forEach((key) => required(key, 'This field is required.'))
+      const saleLabels = {
+        averageSale: 'Average sale',
+        maxSale: 'Maximum sale',
+        monthlySale: 'Estimated monthly volume',
+      }
+      Object.entries(saleLabels).forEach(([key, label]) => {
+        const message = amountError(values[key], label)
+        if (message) errors[key] = message
+      })
+      if (!errors.averageSale && !errors.maxSale && Number(values.maxSale) < Number(values.averageSale)) {
+        errors.maxSale = 'Maximum sale cannot be lower than the average sale.'
+      }
     }
   }
 
-  if (step === SCREEN.hardware && Object.values(products).some((selection) => !selection.own && !Object.values(selection.items || {}).some((quantity) => quantity > 0))) {
+  // Scoped to the applications on screen for the same reason as the shipment
+  // check below: entries left behind by an earlier service selection must not
+  // block a step whose fields the applicant has actually completed.
+  if (step === SCREEN.hardware && applications.some((application) => {
+    const selection = products[application.applicationId] || { own: false, items: {} }
+    return !selection.own && !Object.values(selection.items || {}).some((quantity) => quantity > 0)
+  })) {
     errors.products = 'Select hardware items or indicate that you already own compatible hardware for each service.'
   }
 
   if (step === SCREEN.shipment) {
-    Object.entries(shipments).forEach(([id, form]) => {
+    // Iterate the applications on screen, not every key `shipments` holds.
+    // Going back to Services and changing the selection creates new application
+    // ids, and the old per-application entries linger; validating those raised
+    // an error for a section that is no longer rendered, which the applicant
+    // had no way to clear.
+    applications.forEach((application) => {
+      const id = application.applicationId
+      const form = shipments[id]
+      if (!form) return
       const isMerchantOwned = form.type === 'MerchantOwned' || products[id]?.own
       if (!isMerchantOwned) {
         if (form.type === 'Shipping') {
-          if (!form.recipientName || !form.recipientPhone || !form.email || !form.address || !form.zipCode || !form.state) {
+          if (!form.recipientName || !form.recipientPhone || !form.email || !form.address || !form.city || !form.zipCode || !form.state) {
             errors[`shipment-${id}`] = 'Complete all required shipping fields.'
           } else if (digits(form.zipCode, 10).length !== 5) {
             errors[`shipment-${id}`] = 'Shipping ZIP Code must be 5 digits.'
-          } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) {
+          } else if (!isEmail(form.email)) {
             errors[`shipment-${id}`] = 'Enter a valid email address for delivery updates.'
           }
         }
@@ -1183,6 +1243,9 @@ function validate(step, values, selectedSolutions, plans, products, shipments, c
         if (effectivePaymentType === 'Lease') {
           if (!form.leaseTerm || !form.monthlyPayment || !form.startDate || !form.billingAddress) {
             errors[`payment-${id}`] = 'Complete all required lease details.'
+          } else {
+            const monthlyError = amountError(form.monthlyPayment, 'Monthly payment')
+            if (monthlyError) errors[`payment-${id}`] = monthlyError
           }
         }
       }
@@ -1219,6 +1282,7 @@ export default function ApplicationFlow({ onComplete }) {
   const [uploadedSignatures, setUploadedSignatures] = useState({})
   const [hardwareSearch, setHardwareSearch] = useState('')
   const [isRobotVerified, setIsRobotVerified] = useState(false)
+  const [recaptchaExpired, setRecaptchaExpired] = useState(false)
   const [errors, setErrors] = useState({})
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
@@ -1322,13 +1386,40 @@ export default function ApplicationFlow({ onComplete }) {
       .catch((nextError) => setError(nextError.message))
   }, [step, catalog.preferences.length])
 
+  // Going back to Services and changing the selection creates a fresh set of
+  // application ids. Everything keyed by the previous ids is dropped here, so
+  // no invisible leftover can fail a validation the applicant cannot see, or
+  // reach the API.
+  useEffect(() => {
+    if (!applications.length) return
+    const live = new Set(applications.flatMap((application) => [
+      application.applicationId,
+      String(application.applicationId),
+    ]))
+    const prune = (setter) => setter((prev) => {
+      const kept = Object.fromEntries(Object.entries(prev).filter(([id]) => live.has(id)))
+      return Object.keys(kept).length === Object.keys(prev).length ? prev : kept
+    })
+    prune(setPlans)
+    prune(setProducts)
+    prune(setPreferences)
+    prune(setCheckedByApp)
+    prune(setSignedByApp)
+    prune(setAgreements)
+    prune(setSummaryUrlByApp)
+    prune(setUploadedSignatures)
+  }, [applications])
+
   // Pre-fill shipments & delivery details from Business & Ownership data
   useEffect(() => {
     if (!applications.length) return
     setShipments((prev) => {
-      const next = { ...prev }
+      // Built from the current applications only. Spreading `prev` kept entries
+      // belonging to application ids from an earlier service selection, and
+      // those stale entries went on being validated.
+      const next = {}
       applications.forEach((application) => {
-        const existing = next[application.applicationId] || {}
+        const existing = prev[application.applicationId] || {}
         const ownerFull = `${values.ownerFirstName || ''} ${values.ownerLastName || ''}`.trim()
         const selection = products[application.applicationId] || { own: false, items: {} }
         const hasInStock = !selection.own && Object.entries(selection.items || {}).some(([itemId, qty]) => {
@@ -1529,7 +1620,7 @@ export default function ApplicationFlow({ onComplete }) {
         ownerShipType: values.ownerShipType,
         businessStartDate: values.businessStartDate ? apiDate(values.businessStartDate) : undefined,
         businessType: values.businessType,
-        email: values.email,
+        email: values.email.trim(),
         website: values.website || undefined,
         productsDescription: values.productsDescription,
         source: 'website',
@@ -1544,7 +1635,7 @@ export default function ApplicationFlow({ onComplete }) {
         ownerShipCity: values.ownerShipCity,
         ownerShipZip: values.ownerShipZip,
         socialSecurityNumber: values.socialSecurityNumber,
-        ownerEmail: values.ownerEmail,
+        ownerEmail: values.ownerEmail.trim(),
         ownerPhoneNumber: values.ownerPhoneNumber,
         dLFileUrl,
 
@@ -1617,9 +1708,13 @@ export default function ApplicationFlow({ onComplete }) {
             shipment.shippingDetails = {
               recipientName: form.recipientName,
               phoneNumber: form.recipientPhone,
-              email: form.email,
+              email: String(form.email || '').trim(),
               address: form.address,
               floorStreet: form.floorStreet || undefined,
+              // The form has always asked for the delivery city and marked it
+              // required, but it was never put in the payload, so every order
+              // reached fulfilment without one.
+              city: form.city,
               zipCode: form.zipCode,
               country: form.country || 'United States',
               state: form.state,
@@ -1818,7 +1913,9 @@ export default function ApplicationFlow({ onComplete }) {
 
   const submitFinalApplications = async () => {
     if (!isRobotVerified) {
-      const msg = 'Please complete the Google reCAPTCHA security verification challenge.'
+      const msg = recaptchaExpired
+        ? 'Your security verification expired while you were signing. Please tick the box again to submit.'
+        : 'Please complete the Google reCAPTCHA security verification challenge.'
       setError(msg)
       setErrors((prev) => ({ ...prev, recaptcha: msg }))
       requestAnimationFrame(() => {
@@ -1932,7 +2029,7 @@ export default function ApplicationFlow({ onComplete }) {
   }
 
   const businessFields = (prefix = '') => (
-    <div className="grid gap-5 sm:grid-cols-2">
+    <div className="grid gap-4 sm:grid-cols-2">
       <Field
         id={`${prefix}address`}
         label="Address"
@@ -2107,14 +2204,14 @@ export default function ApplicationFlow({ onComplete }) {
             <StepTitle title="Your information" description="Everything underwriting needs to open your account: the legal entity, the principal owner, the settlement account, and your service preferences." />
             <SectionTitle first icon={Building2} title="Business information" description="Tell us about the legal entity and the business location where you operate." />
             <h3 className="mb-4 text-lg font-extrabold text-navy">Legal information</h3>
-            <div className="grid gap-5 sm:grid-cols-2">
+            <div className="grid gap-4 sm:grid-cols-2">
               <Field id="legalName" label="Legal Business Name" required value={values.legalName} onChange={(event) => change('legalName', event.target.value)} error={errors.legalName} />
               <Field id="contactNumber" label="Legal Phone Number" required value={values.contactNumber} onChange={(event) => change('contactNumber', phone(event.target.value))} error={errors.contactNumber} />
             </div>
             <div className="mt-5">{businessFields('legal')}</div>
             {solutions.includes('ebt') && (
               <div className="mt-5">
-                <Field id="ebtFnsNumber" label="EBT FNS Number" required value={values.ebtFnsNumber} onChange={(event) => change('ebtFnsNumber', event.target.value)} error={errors.ebtFnsNumber} tooltip="Food and Nutrition Service 7-digit retailer authorization number." />
+                <Field id="ebtFnsNumber" label="EBT FNS Number" required inputMode="numeric" maxLength={7} placeholder="1234567" value={values.ebtFnsNumber} onChange={(event) => change('ebtFnsNumber', digits(event.target.value, 7))} error={errors.ebtFnsNumber} tooltip="Food and Nutrition Service 7-digit retailer authorization number." />
               </div>
             )}
             <label className="mt-6 flex items-center gap-3 font-semibold text-slate-700">
@@ -2124,14 +2221,14 @@ export default function ApplicationFlow({ onComplete }) {
             {!values.sameAsLegal && (
               <div className="mt-7 border-t border-slate-200 pt-7">
                 <h3 className="mb-4 text-lg font-extrabold text-navy">DBA information</h3>
-                <div className="grid gap-5 sm:grid-cols-2">
+                <div className="grid gap-4 sm:grid-cols-2">
                   <Field id="businessName" label="Business Name (DBA)" required value={values.businessName} onChange={(event) => change('businessName', event.target.value)} error={errors.businessName} />
                   <Field id="dbaPhoneNumber" label="DBA Phone Number" required value={values.dbaPhoneNumber} onChange={(event) => change('dbaPhoneNumber', phone(event.target.value))} error={errors.dbaPhoneNumber} />
                 </div>
                 <div className="mt-5">{businessFields('dba')}</div>
               </div>
             )}
-            <div className="mt-7 grid gap-5 border-t border-slate-200 pt-7 sm:grid-cols-2">
+            <div className="mt-7 grid gap-4 border-t border-slate-200 pt-7 sm:grid-cols-2">
               <SelectField
                 id="taxType"
                 label="Type of Tax ID"
@@ -2162,7 +2259,7 @@ export default function ApplicationFlow({ onComplete }) {
             </div>
 
             <SectionTitle icon={UserRound} title="Ownership information" description="Provide details for the primary owner or authorized principal." />
-            <div className="grid gap-5 sm:grid-cols-2">
+            <div className="grid gap-4 sm:grid-cols-2">
               <Field id="ownerFirstName" label="Owner First Name" required value={values.ownerFirstName} onChange={(event) => change('ownerFirstName', event.target.value)} error={errors.ownerFirstName} />
               <Field id="ownerLastName" label="Owner Last Name" required value={values.ownerLastName} onChange={(event) => change('ownerLastName', event.target.value)} error={errors.ownerLastName} />
               <Field id="date" label="Date of Birth" required type="date" value={values.date} onChange={(event) => change('date', event.target.value)} error={errors.date} tooltip="Owner must be at least 18 years old to execute merchant agreements." />
@@ -2188,7 +2285,7 @@ export default function ApplicationFlow({ onComplete }) {
               />
               Owner information is the same as legal information
             </label>
-            <div className="mt-6 grid gap-5 sm:grid-cols-2">
+            <div className="mt-6 grid gap-4 sm:grid-cols-2">
               <Field id="residentialAddress" label="Residential Address" required value={values.residentialAddress} onChange={(event) => change('residentialAddress', event.target.value)} error={errors.residentialAddress} />
               <Field id="ownerShipZip" label="ZIP Code" required value={values.ownerShipZip} onChange={(event) => change('ownerShipZip', digits(event.target.value, 5))} placeholder="78701" maxLength={5} error={errors.ownerShipZip} />
               <Field id="ownerShipCity" label="City" required value={values.ownerShipCity} onChange={(event) => change('ownerShipCity', event.target.value)} error={errors.ownerShipCity} />
@@ -2209,14 +2306,15 @@ export default function ApplicationFlow({ onComplete }) {
             </div>
 
             <SectionTitle icon={Landmark} title="Financial information" description="Enter the settlement account and expected processing figures." />
-            <div className="grid gap-5 sm:grid-cols-2">
+            <div className="grid gap-4 sm:grid-cols-2">
               <Field id="bankName" label="Bank Name" value={values.bankName} onChange={(event) => change('bankName', event.target.value)} placeholder="e.g. Chase, Bank of America" />
               <MaskedField
                 id="accountNumber"
                 label="Account Number"
                 required
                 value={values.accountNumber}
-                onChange={(event) => change('accountNumber', event.target.value)}
+                onChange={(event) => change('accountNumber', digits(event.target.value, 17))}
+                inputMode="numeric"
                 placeholder="Settlement checking account number"
                 error={errors.accountNumber}
                 tooltip="Settlement checking account where daily batch deposits will be credited."
@@ -2254,9 +2352,9 @@ export default function ApplicationFlow({ onComplete }) {
               </div>
               {solutions.some((solution) => saleSolutions.has(solution)) && (
                 <>
-                  <Field id="averageSale" label="Average Sale ($)" required type="number" min="0" step="0.01" value={values.averageSale} onChange={(event) => change('averageSale', event.target.value)} error={errors.averageSale} tooltip="Estimated average single transaction ticket amount in dollars." />
-                  <Field id="maxSale" label="Maximum Sale ($)" required type="number" min="0" step="0.01" value={values.maxSale} onChange={(event) => change('maxSale', event.target.value)} error={errors.maxSale} tooltip="Highest single transaction amount you expect to process." />
-                  <Field id="monthlySale" label="Estimated Monthly Volume ($)" required type="number" min="0" step="0.01" value={values.monthlySale} onChange={(event) => change('monthlySale', event.target.value)} error={errors.monthlySale} tooltip="Total expected credit card sales volume per month." />
+                  <Field id="averageSale" label="Average Sale ($)" required inputMode="decimal" placeholder="0.00" value={values.averageSale} onChange={(event) => change('averageSale', amount(event.target.value))} error={errors.averageSale} tooltip="Estimated average single transaction ticket amount in dollars." />
+                  <Field id="maxSale" label="Maximum Sale ($)" required inputMode="decimal" placeholder="0.00" value={values.maxSale} onChange={(event) => change('maxSale', amount(event.target.value))} error={errors.maxSale} tooltip="Highest single transaction amount you expect to process." />
+                  <Field id="monthlySale" label="Estimated Monthly Volume ($)" required inputMode="decimal" placeholder="0.00" value={values.monthlySale} onChange={(event) => change('monthlySale', amount(event.target.value))} error={errors.monthlySale} tooltip="Total expected credit card sales volume per month." />
                 </>
               )}
               <div className="sm:col-span-2">
@@ -2274,7 +2372,7 @@ export default function ApplicationFlow({ onComplete }) {
                 return (
                   <section key={application.applicationId} className="rounded-2xl border border-slate-200 p-5 sm:p-6">
                     <h3 className="mb-4 text-lg font-extrabold capitalize text-navy">{getServiceLabel(application.solution)}</h3>
-                    <div className="grid gap-5 sm:grid-cols-2">
+                    <div className="grid gap-4 sm:grid-cols-2">
                       {definitions.map((definition) => {
                         const setValue = (value) => setPreferences((current) => ({
                           ...current,
@@ -2516,7 +2614,7 @@ export default function ApplicationFlow({ onComplete }) {
                           const moValues = form.merchantOwnedPreferences || {}
 
                           return (
-                            <div className="grid gap-5 sm:grid-cols-2">
+                            <div className="grid gap-4 sm:grid-cols-2">
                               {preferenceDefs.map((def) => {
                                 const val = moValues[def.name] ?? ''
 
@@ -2569,7 +2667,7 @@ export default function ApplicationFlow({ onComplete }) {
 
                     {/* Shipping Form (Pre-populated) */}
                     {form.type === 'Shipping' && !ownHardware && (
-                      <div className="mt-6 grid gap-5 sm:grid-cols-2">
+                      <div className="mt-6 grid gap-4 sm:grid-cols-2">
                         <Field id={`recipient-${application.applicationId}`} label="Recipient Name" required value={form.recipientName} onChange={(event) => setShipment(application.applicationId, 'recipientName', event.target.value)} />
                         <Field id={`company-${application.applicationId}`} label="Company Name" value={form.companyName} onChange={(event) => setShipment(application.applicationId, 'companyName', event.target.value)} />
                         <Field id={`recipient-phone-${application.applicationId}`} label="Phone Number" required value={form.recipientPhone} onChange={(event) => setShipment(application.applicationId, 'recipientPhone', phone(event.target.value))} />
@@ -2584,7 +2682,7 @@ export default function ApplicationFlow({ onComplete }) {
 
                     {/* Pickup Form */}
                     {form.type === 'Pickup' && !ownHardware && (
-                      <div className="mt-6 grid gap-5 sm:grid-cols-2">
+                      <div className="mt-6 grid gap-4 sm:grid-cols-2">
                         <Field id={`pickup-loc-${application.applicationId}`} label="Pickup Location Name" required value={form.pickupLocationName} onChange={(event) => setShipment(application.applicationId, 'pickupLocationName', event.target.value)} />
                         <Field id={`pickup-contact-${application.applicationId}`} label="Contact Name" required value={form.contactName} onChange={(event) => setShipment(application.applicationId, 'contactName', event.target.value)} />
                         <Field id={`pickup-date-${application.applicationId}`} label="Pickup Date" required type="date" value={form.pickupDate} onChange={(event) => setShipment(application.applicationId, 'pickupDate', event.target.value)} />
@@ -2648,9 +2746,9 @@ export default function ApplicationFlow({ onComplete }) {
                           )}
 
                           {activePaymentType === 'Lease' && (
-                            <div className="mt-6 grid gap-5 sm:grid-cols-2">
-                              <Field id={`leaseTerm-${application.applicationId}`} label="Lease Term (Months)" required value={form.leaseTerm} onChange={(event) => setShipment(application.applicationId, 'leaseTerm', event.target.value)} />
-                              <Field id={`monthlyPayment-${application.applicationId}`} label="Monthly Payment ($)" required type="number" min="0" step="0.01" value={form.monthlyPayment} onChange={(event) => setShipment(application.applicationId, 'monthlyPayment', event.target.value)} />
+                            <div className="mt-6 grid gap-4 sm:grid-cols-2">
+                              <Field id={`leaseTerm-${application.applicationId}`} label="Lease Term (Months)" required inputMode="numeric" placeholder="36" value={form.leaseTerm} onChange={(event) => setShipment(application.applicationId, 'leaseTerm', digits(event.target.value, 3))} />
+                              <Field id={`monthlyPayment-${application.applicationId}`} label="Monthly Payment ($)" required inputMode="decimal" placeholder="0.00" value={form.monthlyPayment} onChange={(event) => setShipment(application.applicationId, 'monthlyPayment', amount(event.target.value))} />
                               <Field id={`startDate-${application.applicationId}`} label="Start Date" required type="date" value={form.startDate} onChange={(event) => setShipment(application.applicationId, 'startDate', event.target.value)} />
                               <Field id={`leaseBillingAddress-${application.applicationId}`} label="Billing Address" required value={form.billingAddress} onChange={(event) => setShipment(application.applicationId, 'billingAddress', event.target.value)} />
                             </div>
@@ -2781,11 +2879,13 @@ export default function ApplicationFlow({ onComplete }) {
                 <GoogleRecaptcha
                   onVerify={() => {
                     setIsRobotVerified(true)
+                    setRecaptchaExpired(false)
                     setErrors((prev) => ({ ...prev, recaptcha: '' }))
                     setError('')
                   }}
-                  onExpire={() => {
+                  onExpire={(reason) => {
                     setIsRobotVerified(false)
+                    setRecaptchaExpired(reason === 'expired')
                   }}
                   error={errors.recaptcha}
                 />

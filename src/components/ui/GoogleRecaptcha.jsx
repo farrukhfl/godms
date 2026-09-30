@@ -8,6 +8,14 @@ export default function GoogleRecaptcha({ onVerify, onExpire, error }) {
   const widgetIdRef = useRef(null)
   const siteKey = import.meta.env.VITE_RECAPTCHA_SITE_KEY || import.meta.env.VITE_GOOGLE_RECAPTCHA_SITE_KEY || DEFAULT_RECAPTCHA_SITE_KEY
 
+  // Callers pass inline arrow functions, so these change identity on every
+  // render. Held in refs and read at call time, the widget effect below can
+  // depend on the site key alone instead of re-running constantly.
+  const onVerifyRef = useRef(onVerify)
+  const onExpireRef = useRef(onExpire)
+  onVerifyRef.current = onVerify
+  onExpireRef.current = onExpire
+
   useEffect(() => {
     let isMounted = true
 
@@ -20,13 +28,16 @@ export default function GoogleRecaptcha({ onVerify, onExpire, error }) {
             const id = window.grecaptcha.render(containerRef.current, {
               sitekey: siteKey,
               callback: (token) => {
-                if (onVerify) onVerify(token)
+                onVerifyRef.current?.(token)
               },
+              // Google clears the tick itself after roughly two minutes. Report
+              // it as an expiry so the caller can say so, rather than leaving
+              // the applicant to guess why a box they ticked is empty again.
               'expired-callback': () => {
-                if (onExpire) onExpire()
+                onExpireRef.current?.('expired')
               },
               'error-callback': () => {
-                if (onExpire) onExpire()
+                onExpireRef.current?.('error')
               },
             })
             widgetIdRef.current = id
@@ -57,7 +68,7 @@ export default function GoogleRecaptcha({ onVerify, onExpire, error }) {
     return () => {
       isMounted = false
     }
-  }, [siteKey, onVerify, onExpire])
+  }, [siteKey])
 
   return (
     <div id="google-recaptcha-wrapper" className={`rounded-2xl border p-4 sm:p-5 transition ${error ? 'border-rose-300 bg-rose-50/50' : 'border-slate-200 bg-slate-50'}`}>
