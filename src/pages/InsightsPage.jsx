@@ -42,6 +42,15 @@ const duration = (seconds) => {
 
 const when = (value) => (value ? String(value).slice(0, 16).replace('T', ' ') : '—')
 
+/**
+ * Distinguishes "we never asked" from "they left it blank". Someone who quit
+ * before the Information step has no contact details by definition, and showing
+ * a bare dash makes that look like missing data rather than an early exit.
+ */
+const notProvided = (row) => (
+  <span className="text-slate-400">{Number(row.contactable) === 1 ? '—' : 'Not reached'}</span>
+)
+
 /** Each panel reports its own failure, so one bad query cannot blank the page. */
 function PanelState({ query, children, skeleton = 4 }) {
   if (query.loading) return <Skeleton rows={skeleton} />
@@ -153,6 +162,7 @@ function Dashboard({ onLock }) {
 
   const totals = overview.rows[0] || {}
   const app = appSummary.rows[0] || {}
+  const contactableLeads = leads.rows.filter((row) => Number(row.contactable) === 1).length
   const spark = (key) => trend.rows.map((row) => row[key])
 
   return (
@@ -292,32 +302,30 @@ function Dashboard({ onLock }) {
 
       <div className="mt-5">
         <Panel
-          title="Abandoned applications to follow up"
-          subtitle="Contact details captured before the applicant left. Anyone who later submitted is excluded."
+          title="Abandoned applications"
+          subtitle={
+            contactableLeads > 0
+              ? `${number(contactableLeads)} of these left contact details and can be followed up; the rest quit before the Information step, so there is nobody to call. Anyone who later submitted is excluded.`
+              : 'Everyone who started an application and did not finish. Contact details appear once an applicant reaches the Information step. Anyone who later submitted is excluded.'
+          }
         >
           <PanelState query={leads}>
             <DataTable
               rows={leads.rows}
-              emptyText={
-                Number(app.abandoned) > 0
-                  ? `Nobody to follow up. ${Number(app.abandoned) === 1 ? '1 application was' : `${number(app.abandoned)} applications were`} abandoned in this period, but each was left before an email address was entered.`
-                  : 'No abandoned applications in this period.'
-              }
+              emptyText="No abandoned applications in this period."
               columns={[
-                { key: 'name', label: 'Name', render: (row) => row.name || '—' },
-                { key: 'business', label: 'Business', render: (row) => row.business || '—' },
-                { key: 'email', label: 'Email' },
-                { key: 'phone', label: 'Phone', render: (row) => row.phone || '—' },
+                { key: 'name', label: 'Name', render: (row) => row.name || notProvided(row) },
+                { key: 'business', label: 'Business', render: (row) => row.business || notProvided(row) },
+                { key: 'email', label: 'Email', render: (row) => row.email || notProvided(row) },
+                { key: 'phone', label: 'Phone', render: (row) => row.phone || notProvided(row) },
                 {
-                  key: 'furthest_step_name',
+                  key: 'left_at_step_name',
                   label: 'Left at',
-                  render: (row) => `${row.furthest_step_name || '—'} (${row.furthest_step || '?'}/${APPLICATION_STEP_COUNT})`,
+                  render: (row) =>
+                    `${row.left_at_step_name || '—'} (${row.left_at_step || '?'} of ${row.total_steps || APPLICATION_STEP_COUNT})`,
                 },
-                {
-                  key: 'last_seen',
-                  label: 'Last seen',
-                  render: (row) => (row.last_seen ? String(row.last_seen).slice(0, 16).replace('T', ' ') : '—'),
-                },
+                { key: 'device', label: 'Device', render: (row) => row.device || '—' },
+                { key: 'last_seen', label: 'Last seen', render: (row) => when(row.last_seen) },
               ]}
             />
           </PanelState>

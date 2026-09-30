@@ -372,25 +372,45 @@ const QUERIES = {
 
   // Identified drop-offs for follow-up. Derived the same way, so a lead is
   // listed even if their browser never got to report leaving.
+  // Every abandoned application, not only the ones that got far enough to leave
+  // contact details.
+  //
+  // Contact details are entered on the Information step, so requiring an email
+  // hid everyone who left before it - exactly the early drop-offs worth knowing
+  // about. Someone who quits on the first step cannot be phoned, but the fact
+  // that they quit, when, on what device and how far they got is the signal.
+  //
+  // Contactable rows sort first so the follow-up list stays usable, and the
+  // count of the rest is visible rather than silently dropped.
   abandoned_leads: (d) => `
     SELECT
       argMax(person.properties.email, timestamp) AS email,
       argMax(person.properties.name, timestamp) AS name,
       argMax(person.properties.phone, timestamp) AS phone,
       argMax(person.properties.businessName, timestamp) AS business,
-      max(toInt(properties.step_index)) AS furthest_step,
-      argMax(properties.step_name, toInt(properties.step_index)) AS furthest_step_name,
-      max(timestamp) AS last_seen
+      -- Step, name and step count all read from the same last event, so they
+      -- cannot contradict each other. Taking the highest step number instead
+      -- mixes versions for anyone who tried the form before and after a
+      -- restructure: their furthest step comes from the old flow while their
+      -- step count comes from the new one, producing "Financial (4 of 6)" for
+      -- a step that no longer exists. Where someone was when last seen is also
+      -- a truer reading of "left at" than the furthest point they ever reached.
+      argMax(toInt(properties.step_index), timestamp) AS left_at_step,
+      argMax(properties.step_name, timestamp) AS left_at_step_name,
+      argMax(toInt(properties.total_steps), timestamp) AS total_steps,
+      argMax(coalesce(nullIf(properties.$device_type, ''), 'Unknown'), timestamp) AS device,
+      max(timestamp) AS last_seen,
+      if(isNotNull(argMax(person.properties.email, timestamp))
+        AND argMax(person.properties.email, timestamp) != '', 1, 0) AS contactable
     FROM events
     WHERE event = 'application_step_viewed' AND ${since(d)}
     GROUP BY person_id
-    HAVING isNotNull(email) AND email != ''
-      AND last_seen < now() - INTERVAL ${IDLE_MINUTES} MINUTE
+    HAVING last_seen < now() - INTERVAL ${IDLE_MINUTES} MINUTE
       AND person_id NOT IN (
         SELECT person_id FROM events
         WHERE event = 'application_submitted' AND ${since(d)}
       )
-    ORDER BY last_seen DESC LIMIT 100`,
+    ORDER BY contactable DESC, last_seen DESC LIMIT 200`,
 
   form_performance: (d) => `
     SELECT properties.form_name AS form_name,
