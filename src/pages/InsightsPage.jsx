@@ -3,7 +3,7 @@ import { LockKeyhole, RefreshCw, TriangleAlert } from 'lucide-react'
 import Seo from '../components/Seo'
 import Button from '../components/ui/Button'
 import { APPLICATION_STEP_COUNT } from '../analytics/config'
-import { clearPassword, getPassword, setPassword } from '../features/insights/api'
+import { clearPassword, getPassword, runQuery, setPassword } from '../features/insights/api'
 import useInsights from '../features/insights/useInsights'
 import {
   BarList,
@@ -77,22 +77,15 @@ function SignIn({ onUnlock }) {
     setError('')
     setPassword(value.trim())
 
+    // Signing in through the same helper the panels use, so a misconfigured
+    // endpoint is reported here rather than letting someone in to a dashboard
+    // that can only ever show zeros.
     try {
-      const response = await fetch('/api/insights-query', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-dashboard-password': value.trim() },
-        body: JSON.stringify({ query: 'overview', days: 7 }),
-      })
-      if (!response.ok) {
-        const data = await response.json().catch(() => ({}))
-        clearPassword()
-        setError(data.error || 'Could not sign in.')
-        return
-      }
+      await runQuery('overview', 7)
       onUnlock()
-    } catch {
+    } catch (signInError) {
       clearPassword()
-      setError('Could not reach the analytics endpoint.')
+      setError(signInError?.message || 'Could not sign in.')
     } finally {
       setChecking(false)
     }

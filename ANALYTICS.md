@@ -116,11 +116,32 @@ credential for anything except PostHog reads.
 
 ### Hosting
 
-The function is a Vercel serverless function and works on `godms.vercel.app`
-out of the box. **On SiteGround static hosting it will not run**, and `/insights`
-will report that it cannot reach the endpoint. Options there: enable SiteGround's
-Node.js app support and serve the same handler, port it to a PHP file, or point
-the dashboard at your own backend once it exists.
+Tracking works anywhere, because it runs in the browser. The **dashboard** needs
+somewhere that can execute server code, and that is the one part static hosting
+cannot provide.
+
+`api/insights-query.js` is a Vercel serverless function. On `godms.vercel.app`
+it works untouched. **SiteGround cannot run it**: it answers every path with
+`index.html`, so a request to `/api/insights-query` returns the web page with a
+200. Earlier this silently produced a dashboard of zeros; it now says plainly
+that the endpoint is unavailable.
+
+To use the dashboard from a statically hosted site, point it at a deployment
+that does run the function:
+
+1. On the **Vercel** project, set
+   `INSIGHTS_ALLOWED_ORIGINS=https://godms.com,https://www.godms.com`
+2. Build the **SiteGround** bundle with
+   `VITE_INSIGHTS_API_URL=https://godms.vercel.app/api/insights-query`
+3. Upload that build.
+
+The URL is not a secret - the read key and password stay on the server, and the
+password is still required on every request. The dashboard asks about the site
+it is served from, not the one answering, so godms.com shows production figures
+even though Vercel answers the call.
+
+The alternatives are SiteGround's Node.js app support, or your own backend once
+it exists, at which point this function can be retired.
 
 The dashboard's password lives in `sessionStorage` only, so it is gone when the
 tab closes and is never written into the bundle.

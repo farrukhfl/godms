@@ -29,7 +29,15 @@ const PASSWORD = process.env.INSIGHTS_PASSWORD
 // pollute production's figures.
 //
 // INSIGHTS_HOST_FILTER pins a specific host, or the literal 'all' to opt out.
-const hostClause = (host) => (host ? ` AND properties.$host = '${host}'` : '')
+// godms.com and www.godms.com are one site to everybody except a string
+// comparison, and real traffic arrives on both. Matching the bare host and its
+// www form keeps a single site's figures together instead of quietly splitting
+// them in two.
+const hostClause = (host) => {
+  if (!host) return ''
+  const bare = host.replace(/^www\./, '')
+  return ` AND properties.$host IN ('${bare}', 'www.${bare}')`
+}
 
 const since = (days, host) => `timestamp > now() - INTERVAL ${days} DAY${hostClause(host)}`
 
@@ -452,14 +460,63 @@ const QUERIES = {
 function scopeHost(req) {
   const configured = (process.env.INSIGHTS_HOST_FILTER || '').trim().toLowerCase()
   if (configured === 'all') return ''
+  if (configured) return validHost(configured)
 
-  const raw = configured || req.headers['x-forwarded-host'] || req.headers.host || ''
-  const host = String(raw).split(',')[0].trim().toLowerCase()
-  // Hostname, optionally with a port, so `localhost:5173` matches in development.
+  // A dashboard served from elsewhere is asking about its own site, not about
+  // whichever deployment happens to be running this function. The browser sets
+  // Origin and page scripts cannot forge it, so it is the right source when the
+  // two differ; same-origin requests send it too and resolve to the same host.
+  const origin = String(req.headers.origin || '')
+  if (origin) {
+    try {
+      const fromOrigin = validHost(new URL(origin).host.toLowerCase())
+      if (fromOrigin) return fromOrigin
+    } catch {
+      // Unparseable Origin; fall through to the Host header.
+    }
+  }
+
+  const raw = req.headers['x-forwarded-host'] || req.headers.host || ''
+  return validHost(String(raw).split(',')[0].trim().toLowerCase())
+}
+
+/** Hostname, optionally with a port, so `localhost:5173` matches in development. */
+function validHost(host) {
   return /^[a-z0-9.-]+(:[0-9]+)?$/.test(host) ? host : ''
 }
 
+/**
+ * Allows a dashboard served from another origin to reach this function.
+ *
+ * Static hosting cannot run server code, so a site on SiteGround has no
+ * endpoint of its own and must call one that exists. Origins are listed
+ * explicitly in INSIGHTS_ALLOWED_ORIGINS; with none set this stays same-origin
+ * and nothing is opened up. Cross-origin or not, the password is still
+ * required - CORS decides who may ask, never who may read.
+ */
+function applyCors(req, res) {
+  const allowed = (process.env.INSIGHTS_ALLOWED_ORIGINS || '')
+    .split(',')
+    .map((origin) => origin.trim().toLowerCase())
+    .filter(Boolean)
+
+  const origin = String(req.headers.origin || '').toLowerCase()
+  if (!origin || !allowed.includes(origin)) return
+
+  res.setHeader('Access-Control-Allow-Origin', origin)
+  res.setHeader('Vary', 'Origin')
+  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS')
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, x-dashboard-password, x-insights-host')
+  res.setHeader('Access-Control-Max-Age', '86400')
+}
+
 export default async function handler(req, res) {
+  applyCors(req, res)
+
+  if (req.method === 'OPTIONS') {
+    return res.status(204).end()
+  }
+
   res.setHeader('Cache-Control', 'no-store')
   res.setHeader('X-Content-Type-Options', 'nosniff')
   res.setHeader('X-Robots-Tag', 'noindex, nofollow')
