@@ -1,3 +1,10 @@
+# Apache configuration for static hosting (SiteGround).
+#
+# This file ships inside dist/, but it is a dotfile, and FTP clients and file
+# managers hide those by default. A deploy that misses it takes every route
+# except "/" offline, because a single-page app has no real file at
+# /open-an-account for Apache to serve. Always confirm it reached the server.
+
 <IfModule mod_rewrite.c>
   RewriteEngine On
   RewriteBase /
@@ -17,7 +24,22 @@
   Header always set Referrer-Policy "strict-origin-when-cross-origin"
   Header always set Strict-Transport-Security "max-age=31536000; includeSubDomains"
   Header always set Permissions-Policy "geolocation=(), microphone=(), camera=()"
-  Header always set Content-Security-Policy "default-src 'self'; script-src 'self' https://www.google.com https://www.gstatic.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: https:; connect-src 'self' https://*.gotmsolutions.com https://*.godats.com https://testing.godms.com https://www.google.com; frame-src https://www.google.com; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self'"
+  # connect-src must name every host the browser is allowed to call. Analytics
+  # was added after this policy was written, so without us.i.posthog.com the
+  # browser silently blocks every event and tracking dies the moment this file
+  # reaches the server. us-assets serves the modules posthog-js loads on demand,
+  # and godms.vercel.app answers /insights, which has no endpoint of its own on
+  # static hosting.
+  Header always set Content-Security-Policy "default-src 'self'; script-src 'self' https://www.google.com https://www.gstatic.com https://us-assets.i.posthog.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: https:; connect-src 'self' https://*.gotmsolutions.com https://*.godats.com https://testing.godms.com https://www.google.com https://us.i.posthog.com https://us-assets.i.posthog.com https://godms.vercel.app; frame-src https://www.google.com; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self'"
+</IfModule>
+
+# The dashboard's noindex lives in vercel.json, which Apache never reads. Without
+# this, /insights on static hosting is protected only by a meta tag that a
+# crawler not running JavaScript never sees.
+<IfModule mod_headers.c>
+  SetEnvIf Request_URI "^/insights" DMS_INSIGHTS_PAGE
+  Header always set X-Robots-Tag "noindex, nofollow, noarchive, nosnippet, noimageindex" env=DMS_INSIGHTS_PAGE
+  Header always set Cache-Control "no-store, no-cache, must-revalidate, private" env=DMS_INSIGHTS_PAGE
 </IfModule>
 
 # Cache immutable hashed build assets aggressively; never cache the HTML shell
