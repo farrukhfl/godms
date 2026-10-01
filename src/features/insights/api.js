@@ -6,7 +6,18 @@
 // no merchant credential.
 
 const STORAGE_KEY = 'dms_insights_password'
-const ENDPOINT = '/api/insights-query'
+
+/**
+ * Where the dashboard fetches from.
+ *
+ * Same-origin by default, which is right wherever the site runs on a host that
+ * can execute the function. Static hosting cannot: SiteGround answers every
+ * path with index.html, so an unset value there returns the page itself rather
+ * than data. Point this at a deployment that does run the function
+ * (https://your-app.vercel.app/api/insights-query) to use the dashboard from a
+ * statically hosted site. The URL is not a secret; the key stays on the server.
+ */
+const ENDPOINT = import.meta.env.VITE_INSIGHTS_API_URL || '/api/insights-query'
 
 export function getPassword() {
   try {
@@ -60,7 +71,22 @@ export async function runQuery(name, days, signal) {
     throw new InsightsError('Could not reach the analytics endpoint.', 0)
   }
 
-  const data = await response.json().catch(() => ({}))
+  // Static hosting answers unknown paths with index.html and a 200, so a
+  // successful-looking response can still be a web page. Treating that as empty
+  // data is how a broken deployment came to report zero of everything with no
+  // error at all - the worst way for this to fail, because it looks like truth.
+  const contentType = response.headers.get('content-type') || ''
+  if (!contentType.includes('application/json')) {
+    throw new InsightsError(
+      'The analytics endpoint is not available on this host. It needs a deployment that can run server code, or VITE_INSIGHTS_API_URL pointed at one.',
+      response.status,
+    )
+  }
+
+  const data = await response.json().catch(() => null)
+  if (!data) {
+    throw new InsightsError('The analytics endpoint returned something unreadable.', response.status)
+  }
   if (!response.ok) {
     throw new InsightsError(data.error || `Request failed (${response.status}).`, response.status)
   }
